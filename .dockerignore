@@ -1,0 +1,50 @@
+# Dependencies
+node_modules
+
+# Build output
+.next
+out
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files (except example)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# Docker files (avoid recursive copy)
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+__tests__
+e2e
+
+# Misc
+*.log
+npm-debug.log*
+.npm
+.eslintcache

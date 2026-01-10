@@ -1,0 +1,89 @@
+# ===========================================
+# PlumeNote Docker Compose Configuration
+# Development Environment
+# ===========================================
+
+services:
+  # ----- Database -----
+  db:
+    image: postgres:16-alpine
+    container_name: plumenote-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-plumenote}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-plumenote_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-plumenote}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-plumenote} -d ${POSTGRES_DB:-plumenote}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - plumenote-network
+
+  # ----- Next.js Application -----
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: plumenote-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-plumenote}:${POSTGRES_PASSWORD:-plumenote_dev}@db:5432/${POSTGRES_DB:-plumenote}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:-dev-secret-key-for-local-development-only}
+      AUTH_URL: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - plumenote-network
+
+  # ----- Hocuspocus WebSocket Server (Placeholder) -----
+  ws:
+    build:
+      context: ./server/hocuspocus
+      dockerfile: Dockerfile
+    container_name: plumenote-ws
+    restart: unless-stopped
+    ports:
+      - "1234:1234"
+    environment:
+      NODE_ENV: production
+      PORT: 1234
+      DATABASE_URL: postgresql://${POSTGRES_USER:-plumenote}:${POSTGRES_PASSWORD:-plumenote_dev}@db:5432/${POSTGRES_DB:-plumenote}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:1234"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - plumenote-network
+
+# ----- Volumes -----
+volumes:
+  postgres_data:
+    name: plumenote-postgres-data
+
+# ----- Networks -----
+networks:
+  plumenote-network:
+    name: plumenote-network
+    driver: bridge
