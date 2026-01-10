@@ -19,8 +19,10 @@ model User {
   email         String    @unique
   emailVerified DateTime?
   image         String?
-  password      String?   // For credentials provider
+  password      String?   // For credentials provider (hashed with bcrypt cost >= 10)
+  avatar        String?   // Custom avatar URL
   role          Role      @default(VIEWER)
+  isActive      Boolean   @default(true)  // For account deactivation (FR6)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -64,6 +66,22 @@ model VerificationToken {
   expires    DateTime
 
   @@id([identifier, token])
+}
+
+// ============================================
+// Password Reset Token (FR3)
+// ============================================
+
+model PasswordResetToken {
+  id          String   @id @default(cuid())
+  token       String   @unique  // Token hashé bcrypt (sécurité si DB compromise)
+  tokenPrefix String   @unique  // Premiers 16 chars du token brut (lookup rapide)
+  email       String             // Email de l'utilisateur
+  expiresAt   DateTime           // Date d'expiration (createdAt + 1h)
+  createdAt   DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
 }
 
 // ============================================
