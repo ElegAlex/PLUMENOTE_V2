@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PlumeNote
+
+Application de notes collaboratives pour équipes IT. Éditeur Markdown temps réel avec synchronisation via Yjs/Hocuspocus.
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) with your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Next.js 16** - App Router, React Server Components
+- **React 19** - Concurrent features
+- **TypeScript 5** - Strict mode enabled
+- **Tailwind CSS 4** - CSS-first configuration
+- **Prisma 7** - PostgreSQL ORM (à venir)
+- **Tiptap + Yjs** - Éditeur collaboratif (à venir)
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/                    # Next.js App Router (pages, layouts, routes)
+│
+├── features/               # Feature modules (co-location pattern)
+│   ├── auth/              # Authentification et gestion utilisateurs
+│   ├── notes/             # CRUD et gestion des notes
+│   ├── editor/            # Éditeur Tiptap et extensions
+│   ├── search/            # Recherche full-text et filtrage
+│   ├── workspaces/        # Espaces de travail et permissions
+│   ├── navigation/        # Sidebar, dossiers, arborescence
+│   ├── templates/         # Templates de notes
+│   └── analytics/         # Métriques et statistiques
+│
+├── components/ui/          # shadcn/ui components
+│
+├── lib/                    # Utilitaires globaux
+│   ├── utils.ts           # cn() pour Tailwind class merging
+│   ├── constants.ts       # Constantes globales
+│   └── api-error.ts       # Erreurs RFC 7807
+│
+├── stores/                 # Zustand stores globaux
+│
+└── types/                  # Types TypeScript globaux
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Feature Module Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Chaque feature suit le pattern de co-location :
 
-## Deploy on Vercel
+```
+features/[feature]/
+├── components/            # Composants React spécifiques
+├── hooks/                 # Custom hooks
+├── api/                   # Route handlers et services
+└── index.ts               # Barrel exports
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Naming Conventions
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Élément | Convention | Exemple |
+|---------|------------|---------|
+| Dossiers features | kebab-case | `auth/`, `notes/` |
+| Composants | PascalCase | `NoteCard.tsx` |
+| Hooks | camelCase avec use | `useNotes.ts` |
+| Utilitaires | kebab-case | `api-error.ts` |
+| Index exports | index.ts | Barrel exports |
+
+## Import Aliases
+
+```typescript
+import { cn } from "@/lib/utils";
+import { useNotes } from "@/features/notes";
+import { Button } from "@/components/ui/button";
+```
+
+L'alias `@/*` pointe vers `./src/*`.
+
+## Scripts
+
+```bash
+npm run dev      # Serveur de développement (Turbopack)
+npm run build    # Build de production
+npm run start    # Serveur de production
+npm run lint     # ESLint
+```
+
+## License
+
+Private - Tous droits réservés
