@@ -26,6 +26,8 @@ export interface NotesListProps {
   searchQuery?: string;
   /** Callback when delete is clicked */
   onDelete?: (id: string) => void;
+  /** Callback when favorite is toggled */
+  onToggleFavorite?: (id: string) => void;
   /** Callback when create is clicked */
   onCreate?: () => void;
   /** Callback to retry fetch */
@@ -34,6 +36,8 @@ export interface NotesListProps {
   onClearSearch?: () => void;
   /** ID of note being deleted */
   deletingId?: string | null;
+  /** Whether favorite toggle is in progress */
+  isTogglingFavorite?: boolean;
   /** Additional CSS classes */
   className?: string;
 }
@@ -140,10 +144,12 @@ export function NotesList({
   error,
   searchQuery,
   onDelete,
+  onToggleFavorite,
   onCreate,
   onRetry,
   onClearSearch,
   deletingId,
+  isTogglingFavorite,
   className,
 }: NotesListProps) {
   if (isLoading) {
@@ -174,7 +180,9 @@ export function NotesList({
           key={note.id}
           note={note}
           onDelete={onDelete}
+          onToggleFavorite={onToggleFavorite}
           isDeleting={deletingId === note.id}
+          isTogglingFavorite={isTogglingFavorite}
         />
       ))}
     </div>

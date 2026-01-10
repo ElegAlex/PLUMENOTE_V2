@@ -126,7 +126,7 @@ describe("updateNoteSchema", () => {
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.flatten().formErrors).toContain(
-          "At least one field (title or content) must be provided"
+          "At least one field must be provided"
         );
       }
     });

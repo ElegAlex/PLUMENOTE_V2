@@ -11,9 +11,10 @@
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { MoreHorizontal, Trash2, Edit } from "lucide-react";
+import { MoreHorizontal, Trash2, Edit, Star } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,8 +29,12 @@ export interface NoteCardProps {
   note: Note;
   /** Callback when delete is clicked */
   onDelete?: (id: string) => void;
+  /** Callback when favorite is toggled */
+  onToggleFavorite?: (id: string) => void;
   /** Whether delete is in progress */
   isDeleting?: boolean;
+  /** Whether favorite toggle is in progress */
+  isTogglingFavorite?: boolean;
   /** Additional CSS classes */
   className?: string;
 }
@@ -79,7 +84,9 @@ function formatDate(date: Date | string): string {
 export function NoteCard({
   note,
   onDelete,
+  onToggleFavorite,
   isDeleting = false,
+  isTogglingFavorite = false,
   className,
 }: NoteCardProps) {
   const preview = getPreview(note.content);
@@ -90,11 +97,33 @@ export function NoteCard({
       className={cn(
         "group relative transition-shadow hover:shadow-md",
         isDeleting && "opacity-50 pointer-events-none",
+        note.isFavorite && "ring-1 ring-yellow-400/50",
         className
       )}
     >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
+          {/* Favorite button */}
+          {onToggleFavorite && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-8 w-8 p-0 shrink-0 transition-all",
+                note.isFavorite
+                  ? "text-yellow-500 hover:text-yellow-600"
+                  : "text-muted-foreground/40 hover:text-yellow-500 opacity-0 group-hover:opacity-100 focus:opacity-100"
+              )}
+              onClick={() => onToggleFavorite(note.id)}
+              disabled={isTogglingFavorite}
+              aria-label={note.isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+            >
+              <Star
+                className={cn("h-4 w-4", note.isFavorite && "fill-current")}
+              />
+            </Button>
+          )}
+
           <Link
             href={`/notes/${note.id}`}
             className="flex-1 min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -123,6 +152,15 @@ export function NoteCard({
                   Modifier
                 </Link>
               </DropdownMenuItem>
+              {onToggleFavorite && (
+                <DropdownMenuItem
+                  onClick={() => onToggleFavorite(note.id)}
+                  disabled={isTogglingFavorite}
+                >
+                  <Star className={cn("mr-2 h-4 w-4", note.isFavorite && "fill-current text-yellow-500")} />
+                  {note.isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+                </DropdownMenuItem>
+              )}
               {onDelete && (
                 <DropdownMenuItem
                   onClick={() => onDelete(note.id)}
@@ -154,9 +192,25 @@ export function NoteCard({
           )}
         </Link>
 
+        {/* Tags */}
+        {note.tags && note.tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {note.tags.map((tag) => (
+              <Badge
+                key={tag.id}
+                variant="secondary"
+                className="text-xs"
+                style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
+              >
+                {tag.name}
+              </Badge>
+            ))}
+          </div>
+        )}
+
         {/* Metadata */}
         <p className="mt-3 text-xs text-muted-foreground">
-          Modifie {formatDate(note.updatedAt)}
+          Modifié {formatDate(note.updatedAt)}
         </p>
       </CardContent>
     </Card>

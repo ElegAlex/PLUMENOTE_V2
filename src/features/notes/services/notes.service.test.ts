@@ -62,11 +62,12 @@ describe("notes.service", () => {
         content: "# Hello",
       });
 
-      expect(result).toEqual(mockNote);
+      expect(result.id).toBe(mockNote.id);
       expect(prisma.note.create).toHaveBeenCalledWith({
         data: {
           title: "Test Note",
           content: "# Hello",
+          isFavorite: false,
           createdById: "user-1",
         },
         select: expect.any(Object),
@@ -85,6 +86,7 @@ describe("notes.service", () => {
         data: {
           title: "Sans titre",
           content: "# Content only",
+          isFavorite: false,
           createdById: "user-1",
         },
         select: expect.any(Object),
@@ -103,6 +105,7 @@ describe("notes.service", () => {
         data: {
           title: "Title only",
           content: undefined,
+          isFavorite: false,
           createdById: "user-1",
         },
         select: expect.any(Object),

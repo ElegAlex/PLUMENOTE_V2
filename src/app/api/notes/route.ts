@@ -20,7 +20,7 @@ import {
  * GET /api/notes
  *
  * List paginated notes for the authenticated user.
- * Query params: ?page=1&pageSize=20&search=query
+ * Query params: ?page=1&pageSize=20&search=query&favoriteOnly=true&tagIds=id1,id2&sortBy=updatedAt&sortDir=desc
  */
 export async function GET(request: NextRequest) {
   try {
@@ -38,6 +38,10 @@ export async function GET(request: NextRequest) {
       page: searchParams.get("page") ?? undefined,
       pageSize: searchParams.get("pageSize") ?? undefined,
       search: searchParams.get("search") ?? undefined,
+      favoriteOnly: searchParams.get("favoriteOnly") ?? undefined,
+      tagIds: searchParams.get("tagIds") ?? undefined,
+      sortBy: searchParams.get("sortBy") ?? undefined,
+      sortDir: searchParams.get("sortDir") ?? undefined,
     });
 
     if (!queryResult.success) {
@@ -49,11 +53,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, search } = queryResult.data;
+    const { page, pageSize, search, favoriteOnly, tagIds, sortBy, sortDir } = queryResult.data;
     const { notes, total } = await getUserNotes(session.user.id, {
       page,
       pageSize,
       search,
+      favoriteOnly,
+      tagIds,
+      sortBy,
+      sortDir,
     });
 
     const totalPages = Math.ceil(total / pageSize);

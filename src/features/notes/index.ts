@@ -4,13 +4,16 @@
 // Types
 export type {
   Note,
+  Tag,
   CreateNoteInput,
   UpdateNoteInput,
+  CreateTagInput,
+  UpdateTagInput,
   NotesListResponse,
   NoteResponse,
 } from "./types";
 
-// Schemas
+// Schemas - Notes
 export {
   createNoteSchema,
   updateNoteSchema,
@@ -24,18 +27,42 @@ export type {
   NotesQuerySchemaInput,
 } from "./schemas/note.schema";
 
-// Service
+// Schemas - Tags
+export {
+  createTagSchema,
+  updateTagSchema,
+  tagIdSchema,
+} from "./schemas/tag.schema";
+export type {
+  CreateTagSchemaInput,
+  UpdateTagSchemaInput,
+  TagIdSchemaInput,
+} from "./schemas/tag.schema";
+
+// Service - Notes
 export {
   createNote,
   getNoteById,
   getUserNotes,
   updateNote,
   deleteNote,
+  toggleNoteFavorite,
 } from "./services/notes.service";
+export type { NoteSortField, SortDirection } from "./services/notes.service";
+
+// Service - Tags
+export {
+  createTag,
+  getUserTags,
+  getTagById,
+  updateTag,
+  deleteTag,
+} from "./services/tags.service";
 
 // Hooks
 export { useNote, noteKeys, type UseNoteOptions } from "./hooks/useNote";
 export { useNotes, type UseNotesOptions } from "./hooks/useNotes";
+export { useTags, tagKeys, type UseTagsOptions } from "./hooks/useTags";
 export { useAutoSave, type UseAutoSaveOptions } from "./hooks/useAutoSave";
 
 // Components

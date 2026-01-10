@@ -3,14 +3,21 @@
 /**
  * React Query hook for notes list operations
  *
- * Provides data fetching for notes list with search and pagination.
+ * Provides data fetching for notes list with search, pagination, filtering, and sorting.
  *
  * @see Story 3.3: Liste des Notes
+ * @see Story 3.5: Organisation des Notes
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { noteKeys } from "./useNote";
 import type { Note, NotesListResponse, CreateNoteInput } from "../types";
+
+/** Sort field options */
+export type NoteSortField = "updatedAt" | "createdAt" | "title" | "sortOrder";
+
+/** Sort direction options */
+export type SortDirection = "asc" | "desc";
 
 export interface UseNotesOptions {
   /** Search query to filter notes */
@@ -19,6 +26,14 @@ export interface UseNotesOptions {
   page?: number;
   /** Number of items per page */
   pageSize?: number;
+  /** Filter to favorites only */
+  favoriteOnly?: boolean;
+  /** Filter by tag IDs */
+  tagIds?: string[];
+  /** Sort field */
+  sortBy?: NoteSortField;
+  /** Sort direction */
+  sortDir?: SortDirection;
   /** Whether to fetch immediately */
   enabled?: boolean;
 }
@@ -27,12 +42,24 @@ export interface UseNotesOptions {
  * Fetch notes list from API
  */
 async function fetchNotes(options: UseNotesOptions = {}): Promise<NotesListResponse> {
-  const { search, page = 1, pageSize = 20 } = options;
+  const {
+    search,
+    page = 1,
+    pageSize = 20,
+    favoriteOnly,
+    tagIds,
+    sortBy = "updatedAt",
+    sortDir = "desc",
+  } = options;
 
   const params = new URLSearchParams();
   if (search) params.set("search", search);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
+  if (favoriteOnly) params.set("favoriteOnly", "true");
+  if (tagIds?.length) params.set("tagIds", tagIds.join(","));
+  params.set("sortBy", sortBy);
+  params.set("sortDir", sortDir);
 
   const response = await fetch(`/api/notes?${params.toString()}`);
 
@@ -48,6 +75,29 @@ async function fetchNotes(options: UseNotesOptions = {}): Promise<NotesListRespo
   }
 
   return response.json();
+}
+
+/**
+ * Toggle favorite status for a note
+ */
+async function toggleFavorite(noteId: string): Promise<Note> {
+  const response = await fetch(`/api/notes/${noteId}/favorite`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to toggle favorite";
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || errorMessage;
+    } catch {
+      errorMessage = response.statusText || errorMessage;
+    }
+    throw new Error(errorMessage);
+  }
+
+  const data = await response.json();
+  return data.data;
 }
 
 /**
@@ -102,23 +152,39 @@ async function deleteNote(id: string): Promise<void> {
  *
  * @example
  * ```tsx
- * const { notes, isLoading, createNote, deleteNote } = useNotes({ search: "hello" });
+ * const { notes, isLoading, createNote, deleteNote, toggleFavorite } = useNotes({
+ *   search: "hello",
+ *   favoriteOnly: true,
+ *   sortBy: "title",
+ * });
  *
  * // Create a new note
  * const newNote = await createNoteAsync({ title: "My Note" });
  *
  * // Delete a note
  * deleteNote("note-id");
+ *
+ * // Toggle favorite
+ * toggleFavorite("note-id");
  * ```
  */
 export function useNotes(options: UseNotesOptions = {}) {
-  const { search, page = 1, pageSize = 20, enabled = true } = options;
+  const {
+    search,
+    page = 1,
+    pageSize = 20,
+    favoriteOnly,
+    tagIds,
+    sortBy = "updatedAt",
+    sortDir = "desc",
+    enabled = true,
+  } = options;
   const queryClient = useQueryClient();
 
   // Query for fetching notes list
   const query = useQuery({
-    queryKey: noteKeys.list({ search, page, pageSize }),
-    queryFn: () => fetchNotes({ search, page, pageSize }),
+    queryKey: noteKeys.list({ search, page, pageSize, favoriteOnly, tagIds, sortBy, sortDir }),
+    queryFn: () => fetchNotes({ search, page, pageSize, favoriteOnly, tagIds, sortBy, sortDir }),
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -138,6 +204,17 @@ export function useNotes(options: UseNotesOptions = {}) {
     onSuccess: (_, deletedId) => {
       // Remove from cache
       queryClient.removeQueries({ queryKey: noteKeys.detail(deletedId) });
+      // Invalidate list queries to refresh
+      queryClient.invalidateQueries({ queryKey: noteKeys.lists() });
+    },
+  });
+
+  // Mutation for toggling favorite
+  const favoriteMutation = useMutation({
+    mutationFn: toggleFavorite,
+    onSuccess: (updatedNote) => {
+      // Update the note in cache
+      queryClient.setQueryData(noteKeys.detail(updatedNote.id), { data: updatedNote });
       // Invalidate list queries to refresh
       queryClient.invalidateQueries({ queryKey: noteKeys.lists() });
     },
@@ -170,6 +247,14 @@ export function useNotes(options: UseNotesOptions = {}) {
     deleteNote: deleteMutation.mutate,
     /** Delete a note (async) */
     deleteNoteAsync: deleteMutation.mutateAsync,
+    /** Whether favorite is being toggled */
+    isTogglingFavorite: favoriteMutation.isPending,
+    /** Error if toggle failed */
+    toggleFavoriteError: favoriteMutation.error as Error | null,
+    /** Toggle favorite status */
+    toggleFavorite: favoriteMutation.mutate,
+    /** Toggle favorite status (async) */
+    toggleFavoriteAsync: favoriteMutation.mutateAsync,
     /** Refetch the notes list */
     refetch: query.refetch,
   };

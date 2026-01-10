@@ -30,6 +30,7 @@ model User {
   sessions    Session[]
   invitations Invitation[] @relation("InvitationsSent")
   notes       Note[]       @relation("NotesCreated")
+  tags        Tag[]
 }
 
 model Account {
@@ -126,6 +127,10 @@ model Note {
   content      String?   @db.Text     // Markdown content for search and display
   ydoc         Bytes?                  // Y.Doc encoded for collaboration (Epic 4)
 
+  // Story 3.5: Organization features
+  isFavorite   Boolean   @default(false)  // Pin/favorite notes
+  sortOrder    Int       @default(0)       // Custom sort order (lower = first)
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -133,10 +138,54 @@ model Note {
   createdById  String
   createdBy    User      @relation("NotesCreated", fields: [createdById], references: [id], onDelete: Cascade)
 
+  // Tags relationship (Story 3.5)
+  tags         NoteTag[]
+
   // Full-text search preparation (Epic 6)
   searchVector Unsupported("tsvector")?
 
   @@index([createdById])
   @@index([createdAt])
   @@index([updatedAt])
+  @@index([isFavorite])
+  @@index([sortOrder])
+}
+
+// ============================================
+// Tag Model (Story 3.5 - Tags/Categories)
+// ============================================
+
+model Tag {
+  id        String    @id @default(cuid())
+  name      String                        // Tag name (e.g., "work", "personal")
+  color     String    @default("#6b7280") // Hex color for UI display
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Ownership - tags are per-user
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Notes relationship
+  notes     NoteTag[]
+
+  @@unique([userId, name]) // Tag names unique per user
+  @@index([userId])
+}
+
+// ============================================
+// NoteTag Junction (Many-to-Many)
+// ============================================
+
+model NoteTag {
+  noteId    String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, tagId])
+  @@index([tagId])
 }

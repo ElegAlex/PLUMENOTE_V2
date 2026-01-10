@@ -83,8 +83,8 @@ describe("NoteCard", () => {
     it("should render relative date", () => {
       render(<NoteCard note={mockNote} />);
 
-      // Should contain "Modifie" prefix
-      expect(screen.getByText(/Modifie/)).toBeInTheDocument();
+      // Should contain "Modifié" prefix
+      expect(screen.getByText(/Modifié/)).toBeInTheDocument();
     });
 
     it("should link to note edit page", () => {

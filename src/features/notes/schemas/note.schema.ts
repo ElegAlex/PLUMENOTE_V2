@@ -24,13 +24,15 @@ export const createNoteSchema = z.object({
     .max(1_000_000, "Content must be 1MB or less")
     .optional()
     .transform(emptyToUndefined),
+  isFavorite: z.boolean().optional(),
+  tagIds: z.array(z.string().cuid("Invalid tag ID format")).optional(),
 });
 
 export type CreateNoteSchemaInput = z.infer<typeof createNoteSchema>;
 
 /**
  * Schema for updating an existing note
- * - At least one field (title or content) must be provided
+ * - At least one field must be provided
  * - Empty strings are treated as undefined
  */
 export const updateNoteSchema = z
@@ -46,10 +48,19 @@ export const updateNoteSchema = z
       .max(1_000_000, "Content must be 1MB or less")
       .optional()
       .transform(emptyToUndefined),
+    isFavorite: z.boolean().optional(),
+    tagIds: z.array(z.string().cuid("Invalid tag ID format")).optional(),
   })
-  .refine((data) => data.title !== undefined || data.content !== undefined, {
-    message: "At least one field (title or content) must be provided",
-  });
+  .refine(
+    (data) =>
+      data.title !== undefined ||
+      data.content !== undefined ||
+      data.isFavorite !== undefined ||
+      data.tagIds !== undefined,
+    {
+      message: "At least one field must be provided",
+    }
+  );
 
 export type UpdateNoteSchemaInput = z.infer<typeof updateNoteSchema>;
 
@@ -63,10 +74,19 @@ export const noteIdSchema = z.object({
 export type NoteIdSchemaInput = z.infer<typeof noteIdSchema>;
 
 /**
+ * Valid sort fields for notes
+ */
+const sortFields = ["updatedAt", "createdAt", "title", "sortOrder"] as const;
+
+/**
  * Schema for notes list query parameters
  * - page: positive integer, defaults to 1
  * - pageSize: positive integer, max 100, defaults to 20
  * - search: optional string, max 255 chars, trimmed
+ * - favoriteOnly: optional boolean, filter to favorites only
+ * - tagIds: optional comma-separated tag IDs for filtering
+ * - sortBy: sort field (updatedAt, createdAt, title, sortOrder)
+ * - sortDir: sort direction (asc, desc)
  */
 export const notesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -77,6 +97,16 @@ export const notesQuerySchema = z.object({
     .max(255, "Search query must be 255 characters or less")
     .optional()
     .transform(emptyToUndefined),
+  favoriteOnly: z
+    .string()
+    .transform((val) => val === "true")
+    .optional(),
+  tagIds: z
+    .string()
+    .transform((val) => (val ? val.split(",").filter(Boolean) : undefined))
+    .optional(),
+  sortBy: z.enum(sortFields).default("updatedAt"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
 });
 
 export type NotesQuerySchemaInput = z.infer<typeof notesQuerySchema>;
