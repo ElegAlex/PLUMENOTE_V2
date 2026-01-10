@@ -56,7 +56,7 @@ export async function Header() {
       <div className="container mx-auto flex h-14 items-center justify-between px-4">
         {/* Logo / Brand */}
         <Link
-          href="/"
+          href="/dashboard"
           className="flex items-center gap-2 font-semibold rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
           PlumeNote

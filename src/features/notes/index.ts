@@ -35,3 +35,9 @@ export {
 
 // Hooks
 export { useNote, noteKeys, type UseNoteOptions } from "./hooks/useNote";
+export { useNotes, type UseNotesOptions } from "./hooks/useNotes";
+export { useAutoSave, type UseAutoSaveOptions } from "./hooks/useAutoSave";
+
+// Components
+export { NoteCard, type NoteCardProps } from "./components/NoteCard";
+export { NotesList, type NotesListProps } from "./components/NotesList";
