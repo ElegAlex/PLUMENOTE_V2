@@ -70,6 +70,92 @@ describe('MockEmailService', () => {
       expect(output).toContain('PlumeNote');
     });
   });
+
+  describe('sendInvitationEmail', () => {
+    it('should not throw when sending invitation email', async () => {
+      await expect(
+        mockService.sendInvitationEmail(
+          'newuser@example.com',
+          'https://plumenote.app/register?token=abc123',
+          'Jean Dupont'
+        )
+      ).resolves.not.toThrow();
+    });
+
+    it('should log invitation to console', async () => {
+      await mockService.sendInvitationEmail(
+        'newuser@example.com',
+        'https://plumenote.app/register?token=abc123',
+        'Jean Dupont'
+      );
+
+      expect(console.log).toHaveBeenCalled();
+    });
+
+    it('should include recipient email in console output', async () => {
+      await mockService.sendInvitationEmail(
+        'invitee@test.com',
+        'https://plumenote.app/register?token=xyz',
+        'Admin User'
+      );
+
+      const calls = (console.log as ReturnType<typeof vi.fn>).mock.calls;
+      const output = calls.map((call) => call[0]).join('\n');
+
+      expect(output).toContain('invitee@test.com');
+    });
+
+    it('should include register URL in console output', async () => {
+      const registerUrl = 'https://plumenote.app/register?token=invitation123';
+      await mockService.sendInvitationEmail('test@example.com', registerUrl, 'Admin');
+
+      const calls = (console.log as ReturnType<typeof vi.fn>).mock.calls;
+      const output = calls.map((call) => call[0]).join('\n');
+
+      expect(output).toContain(registerUrl);
+    });
+
+    it('should include inviter name in console output', async () => {
+      await mockService.sendInvitationEmail(
+        'test@example.com',
+        'https://plumenote.app/register',
+        'Marie Martin'
+      );
+
+      const calls = (console.log as ReturnType<typeof vi.fn>).mock.calls;
+      const output = calls.map((call) => call[0]).join('\n');
+
+      expect(output).toContain('Marie Martin');
+    });
+
+    it('should include 7-day expiration notice', async () => {
+      await mockService.sendInvitationEmail(
+        'test@example.com',
+        'https://plumenote.app/register',
+        'Admin'
+      );
+
+      const calls = (console.log as ReturnType<typeof vi.fn>).mock.calls;
+      const output = calls.map((call) => call[0]).join('\n');
+
+      expect(output).toContain('7 jours');
+    });
+
+    it('should include French invitation content', async () => {
+      await mockService.sendInvitationEmail(
+        'test@example.com',
+        'https://plumenote.app/register',
+        'Admin'
+      );
+
+      const calls = (console.log as ReturnType<typeof vi.fn>).mock.calls;
+      const output = calls.map((call) => call[0]).join('\n');
+
+      expect(output).toContain('invité');
+      expect(output).toContain('rejoindre PlumeNote');
+      expect(output).toContain('créer votre compte');
+    });
+  });
 });
 
 describe('emailService singleton', () => {
@@ -79,5 +165,9 @@ describe('emailService singleton', () => {
 
   it('should have sendPasswordResetEmail method', () => {
     expect(typeof emailService.sendPasswordResetEmail).toBe('function');
+  });
+
+  it('should have sendInvitationEmail method', () => {
+    expect(typeof emailService.sendInvitationEmail).toBe('function');
   });
 });

@@ -65,6 +65,16 @@ export async function loginAction(
   } catch (error) {
     // Handle Auth.js specific errors
     if (error instanceof AuthError) {
+      // Check for deactivated account error (FR6)
+      const errorMessage = error.cause?.err?.message;
+      if (errorMessage === 'ACCOUNT_DEACTIVATED') {
+        logger.warn({ email }, 'Login attempt on deactivated account');
+        return {
+          success: false,
+          error: 'Votre compte a été désactivé. Contactez un administrateur.',
+        };
+      }
+
       switch (error.type) {
         case 'CredentialsSignin':
           // Log failed attempt (don't log password, only email for security audit)

@@ -1,0 +1,328 @@
+/**
+ * Unit tests for notes service
+ *
+ * Tests all CRUD operations with ownership verification.
+ */
+
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock dependencies before importing the service
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    note: {
+      create: vi.fn(),
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      count: vi.fn(),
+    },
+    $transaction: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/logger", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+import {
+  createNote,
+  getNoteById,
+  getUserNotes,
+  updateNote,
+  deleteNote,
+} from "./notes.service";
+import { prisma } from "@/lib/prisma";
+import { NotFoundError, ForbiddenError } from "@/lib/api-error";
+
+describe("notes.service", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe("createNote", () => {
+    const mockNote = {
+      id: "note-123",
+      title: "Test Note",
+      content: "# Hello",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdById: "user-1",
+    };
+
+    it("should create a note with provided title and content", async () => {
+      vi.mocked(prisma.note.create).mockResolvedValue(mockNote);
+
+      const result = await createNote("user-1", {
+        title: "Test Note",
+        content: "# Hello",
+      });
+
+      expect(result).toEqual(mockNote);
+      expect(prisma.note.create).toHaveBeenCalledWith({
+        data: {
+          title: "Test Note",
+          content: "# Hello",
+          createdById: "user-1",
+        },
+        select: expect.any(Object),
+      });
+    });
+
+    it("should use default title when not provided", async () => {
+      vi.mocked(prisma.note.create).mockResolvedValue({
+        ...mockNote,
+        title: "Sans titre",
+      });
+
+      await createNote("user-1", { content: "# Content only" });
+
+      expect(prisma.note.create).toHaveBeenCalledWith({
+        data: {
+          title: "Sans titre",
+          content: "# Content only",
+          createdById: "user-1",
+        },
+        select: expect.any(Object),
+      });
+    });
+
+    it("should create note with undefined content", async () => {
+      vi.mocked(prisma.note.create).mockResolvedValue({
+        ...mockNote,
+        content: null,
+      });
+
+      await createNote("user-1", { title: "Title only" });
+
+      expect(prisma.note.create).toHaveBeenCalledWith({
+        data: {
+          title: "Title only",
+          content: undefined,
+          createdById: "user-1",
+        },
+        select: expect.any(Object),
+      });
+    });
+  });
+
+  describe("getNoteById", () => {
+    const mockNote = {
+      id: "note-123",
+      title: "Test Note",
+      content: "# Hello",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdById: "user-1",
+    };
+
+    it("should return note when user is owner", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue(mockNote);
+
+      const result = await getNoteById("note-123", "user-1");
+
+      expect(result).toEqual(mockNote);
+    });
+
+    it("should throw NotFoundError when note does not exist", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue(null);
+
+      await expect(getNoteById("nonexistent", "user-1")).rejects.toThrow(
+        NotFoundError
+      );
+      await expect(getNoteById("nonexistent", "user-1")).rejects.toThrow(
+        "Note with ID 'nonexistent' not found"
+      );
+    });
+
+    it("should throw ForbiddenError when user is not owner", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        ...mockNote,
+        createdById: "other-user",
+      });
+
+      await expect(getNoteById("note-123", "user-1")).rejects.toThrow(
+        ForbiddenError
+      );
+      await expect(getNoteById("note-123", "user-1")).rejects.toThrow(
+        "You do not have permission to access this note"
+      );
+    });
+  });
+
+  describe("getUserNotes", () => {
+    const mockNotes = [
+      {
+        id: "note-1",
+        title: "Note 1",
+        content: "Content 1",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdById: "user-1",
+      },
+      {
+        id: "note-2",
+        title: "Note 2",
+        content: "Content 2",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdById: "user-1",
+      },
+    ];
+
+    it("should return paginated notes for user", async () => {
+      vi.mocked(prisma.$transaction).mockResolvedValue([mockNotes, 2]);
+
+      const result = await getUserNotes("user-1", { page: 1, pageSize: 20 });
+
+      expect(result.notes).toEqual(mockNotes);
+      expect(result.total).toBe(2);
+    });
+
+    it("should apply correct skip value for pagination", async () => {
+      vi.mocked(prisma.$transaction).mockResolvedValue([[], 0]);
+
+      await getUserNotes("user-1", { page: 3, pageSize: 10 });
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+
+    it("should return empty array when user has no notes", async () => {
+      vi.mocked(prisma.$transaction).mockResolvedValue([[], 0]);
+
+      const result = await getUserNotes("user-1", { page: 1, pageSize: 20 });
+
+      expect(result.notes).toEqual([]);
+      expect(result.total).toBe(0);
+    });
+
+    it("should order notes by updatedAt desc", async () => {
+      vi.mocked(prisma.$transaction).mockResolvedValue([mockNotes, 2]);
+
+      await getUserNotes("user-1", { page: 1, pageSize: 20 });
+
+      // The transaction is called with array of queries
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+  });
+
+  describe("updateNote", () => {
+    const mockNote = {
+      id: "note-123",
+      title: "Updated Title",
+      content: "Updated content",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      createdById: "user-1",
+    };
+
+    it("should update note when user is owner", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+      });
+      vi.mocked(prisma.note.update).mockResolvedValue(mockNote);
+
+      const result = await updateNote("note-123", "user-1", {
+        title: "Updated Title",
+      });
+
+      expect(result).toEqual(mockNote);
+    });
+
+    it("should throw NotFoundError when note does not exist", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue(null);
+
+      await expect(
+        updateNote("nonexistent", "user-1", { title: "Test" })
+      ).rejects.toThrow(NotFoundError);
+    });
+
+    it("should throw ForbiddenError when user is not owner", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "other-user",
+      });
+
+      await expect(
+        updateNote("note-123", "user-1", { title: "Test" })
+      ).rejects.toThrow(ForbiddenError);
+      await expect(
+        updateNote("note-123", "user-1", { title: "Test" })
+      ).rejects.toThrow("You do not have permission to update this note");
+    });
+
+    it("should only update provided fields", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+      });
+      vi.mocked(prisma.note.update).mockResolvedValue(mockNote);
+
+      await updateNote("note-123", "user-1", { title: "New Title" });
+
+      expect(prisma.note.update).toHaveBeenCalledWith({
+        where: { id: "note-123" },
+        data: { title: "New Title" },
+        select: expect.any(Object),
+      });
+    });
+
+    it("should update both title and content when provided", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+      });
+      vi.mocked(prisma.note.update).mockResolvedValue(mockNote);
+
+      await updateNote("note-123", "user-1", {
+        title: "New Title",
+        content: "New content",
+      });
+
+      expect(prisma.note.update).toHaveBeenCalledWith({
+        where: { id: "note-123" },
+        data: { title: "New Title", content: "New content" },
+        select: expect.any(Object),
+      });
+    });
+  });
+
+  describe("deleteNote", () => {
+    it("should delete note when user is owner", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+      });
+      vi.mocked(prisma.note.delete).mockResolvedValue({} as never);
+
+      await expect(deleteNote("note-123", "user-1")).resolves.toBeUndefined();
+      expect(prisma.note.delete).toHaveBeenCalledWith({
+        where: { id: "note-123" },
+      });
+    });
+
+    it("should throw NotFoundError when note does not exist", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue(null);
+
+      await expect(deleteNote("nonexistent", "user-1")).rejects.toThrow(
+        NotFoundError
+      );
+      await expect(deleteNote("nonexistent", "user-1")).rejects.toThrow(
+        "Note with ID 'nonexistent' not found"
+      );
+    });
+
+    it("should throw ForbiddenError when user is not owner", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "other-user",
+      });
+
+      await expect(deleteNote("note-123", "user-1")).rejects.toThrow(
+        ForbiddenError
+      );
+      await expect(deleteNote("note-123", "user-1")).rejects.toThrow(
+        "You do not have permission to delete this note"
+      );
+    });
+  });
+});

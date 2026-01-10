@@ -95,7 +95,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // User account is deactivated (FR6)
           if (!user.isActive) {
             logger.warn({ userId: user.id }, 'Auth attempt on deactivated account');
-            return null;
+            throw new Error('ACCOUNT_DEACTIVATED');
           }
 
           // Verify password

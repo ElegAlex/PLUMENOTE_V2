@@ -26,8 +26,10 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts Account[]
-  sessions Session[]
+  accounts    Account[]
+  sessions    Session[]
+  invitations Invitation[] @relation("InvitationsSent")
+  notes       Note[]       @relation("NotesCreated")
 }
 
 model Account {
@@ -92,4 +94,49 @@ enum Role {
   ADMIN
   EDITOR
   VIEWER
+}
+
+// ============================================
+// Invitation Model (FR5 - User Invitation)
+// ============================================
+
+model Invitation {
+  id          String    @id @default(cuid())
+  email       String    // Email de l'utilisateur invité
+  token       String    @unique  // Token unique pour l'invitation
+  expiresAt   DateTime  // Date d'expiration (createdAt + 7 jours)
+  usedAt      DateTime? // Date d'utilisation (null si non utilisée)
+  createdAt   DateTime  @default(now())
+
+  invitedById String
+  invitedBy   User      @relation("InvitationsSent", fields: [invitedById], references: [id])
+
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ============================================
+// Note Model (Epic 3 - Notes Management)
+// ============================================
+
+model Note {
+  id           String    @id @default(cuid())
+  title        String    @default("Sans titre")
+  content      String?   @db.Text     // Markdown content for search and display
+  ydoc         Bytes?                  // Y.Doc encoded for collaboration (Epic 4)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Ownership
+  createdById  String
+  createdBy    User      @relation("NotesCreated", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Full-text search preparation (Epic 6)
+  searchVector Unsupported("tsvector")?
+
+  @@index([createdById])
+  @@index([createdAt])
+  @@index([updatedAt])
 }

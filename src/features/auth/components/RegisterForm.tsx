@@ -5,6 +5,8 @@
  *
  * Uses React 19 useActionState for form handling.
  * Implements WCAG 2.1 AA accessibility requirements.
+ *
+ * @see Story 2.6: Supports invitation tokens (FR5)
  */
 
 import { useActionState, useEffect } from 'react';
@@ -22,9 +24,16 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
+interface RegisterFormProps {
+  /** Invitation token for pre-authorized registration */
+  invitationToken?: string;
+  /** Pre-filled email from invitation */
+  prefilledEmail?: string;
+}
+
 const initialState: RegisterState = { success: false };
 
-export function RegisterForm() {
+export function RegisterForm({ invitationToken, prefilledEmail }: RegisterFormProps) {
   const router = useRouter();
   const [state, formAction, isPending] = useActionState(registerAction, initialState);
 
@@ -46,6 +55,11 @@ export function RegisterForm() {
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
+          {/* Hidden field for invitation token */}
+          {invitationToken && (
+            <input type="hidden" name="invitationToken" value={invitationToken} />
+          )}
+
           {/* Global error message (e.g., email already exists) */}
           {state.error && !state.fieldErrors && (
             <div
@@ -91,10 +105,18 @@ export function RegisterForm() {
               placeholder="votre@email.com"
               required
               disabled={isPending}
+              readOnly={!!prefilledEmail}
+              defaultValue={prefilledEmail}
               autoComplete="email"
               aria-describedby={state.fieldErrors?.email ? 'email-error' : undefined}
               aria-invalid={state.fieldErrors?.email ? 'true' : undefined}
+              className={prefilledEmail ? 'bg-muted' : undefined}
             />
+            {prefilledEmail && (
+              <p className="text-sm text-muted-foreground">
+                Adresse email de l'invitation
+              </p>
+            )}
             {state.fieldErrors?.email && (
               <p
                 id="email-error"

@@ -35,12 +35,27 @@ export const authConfig = {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isOnDashboard = nextUrl.pathname.startsWith('/dashboard');
+      const isOnSettings = nextUrl.pathname.startsWith('/settings');
+      const isOnAdmin = nextUrl.pathname.startsWith('/admin');
       const isOnProtectedApi =
         nextUrl.pathname.startsWith('/api/') &&
         !nextUrl.pathname.startsWith('/api/auth');
 
       // Protect dashboard routes
       if (isOnDashboard) {
+        if (isLoggedIn) return true;
+        return false; // Redirect to login page
+      }
+
+      // Protect settings routes (Story 2.5 - AC #7)
+      if (isOnSettings) {
+        if (isLoggedIn) return true;
+        return false; // Redirect to login page
+      }
+
+      // Protect admin routes (Story 2.6 - FR5)
+      // Note: Role check happens in the admin layout, middleware only checks auth
+      if (isOnAdmin) {
         if (isLoggedIn) return true;
         return false; // Redirect to login page
       }

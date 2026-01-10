@@ -130,3 +130,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Tiptap Editor Placeholder */
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  height: 0;
+}

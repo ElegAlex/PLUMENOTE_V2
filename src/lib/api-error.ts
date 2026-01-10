@@ -1,5 +1,7 @@
 // RFC 7807 Problem Details for HTTP APIs
 
+import { NextResponse } from "next/server";
+
 export interface ApiError {
   type: string;
   title: string;
@@ -36,3 +38,55 @@ export const forbidden = (detail?: string) =>
 
 export const internalError = (detail?: string) =>
   createApiError(500, "Internal Server Error", detail);
+
+/**
+ * Create a NextResponse with RFC 7807 error format
+ */
+export function createErrorResponse(
+  type: string,
+  detail: string,
+  status: number,
+  title?: string
+): NextResponse {
+  return NextResponse.json(
+    {
+      type: `https://plumenote.app/errors/${type}`,
+      title:
+        title ??
+        type.charAt(0).toUpperCase() + type.slice(1).replace(/-/g, " "),
+      status,
+      detail,
+    },
+    { status }
+  );
+}
+
+/**
+ * Custom error class for "not found" errors
+ */
+export class NotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
+/**
+ * Custom error class for "forbidden" errors
+ */
+export class ForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
+/**
+ * Custom error class for validation errors
+ */
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
