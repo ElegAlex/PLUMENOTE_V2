@@ -67,25 +67,52 @@ export async function getNoteById(noteId: string, userId: string): Promise<Note>
 }
 
 /**
- * Get paginated list of notes for a user
+ * Options for getUserNotes query
+ */
+export interface GetUserNotesOptions {
+  page: number;
+  pageSize: number;
+  search?: string;
+}
+
+/**
+ * Get paginated list of notes for a user with optional search
+ *
+ * Search matches against title and content using case-insensitive LIKE.
+ * HTML tags are included in content search but typically don't affect results.
  */
 export async function getUserNotes(
   userId: string,
-  options: { page: number; pageSize: number }
+  options: GetUserNotesOptions
 ): Promise<{ notes: Note[]; total: number }> {
-  const { page, pageSize } = options;
+  const { page, pageSize, search } = options;
   const skip = (page - 1) * pageSize;
+
+  // Build where clause with optional search filter
+  const where = {
+    createdById: userId,
+    ...(search && {
+      OR: [
+        { title: { contains: search, mode: "insensitive" as const } },
+        { content: { contains: search, mode: "insensitive" as const } },
+      ],
+    }),
+  };
 
   const [notes, total] = await prisma.$transaction([
     prisma.note.findMany({
-      where: { createdById: userId },
+      where,
       select: noteSelect,
       orderBy: { updatedAt: "desc" },
       skip,
       take: pageSize,
     }),
-    prisma.note.count({ where: { createdById: userId } }),
+    prisma.note.count({ where }),
   ]);
+
+  if (search) {
+    logger.info({ userId, search, total }, "Notes search executed");
+  }
 
   return { notes, total };
 }

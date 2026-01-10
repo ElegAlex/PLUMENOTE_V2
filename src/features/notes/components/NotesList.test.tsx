@@ -178,6 +178,49 @@ describe("NotesList", () => {
     });
   });
 
+  describe("search no results state", () => {
+    it("should render no results state when searchQuery is provided and notes is empty", () => {
+      render(<NotesList notes={[]} searchQuery="hello" />);
+
+      expect(screen.getByText("Aucun resultat")).toBeInTheDocument();
+      expect(
+        screen.getByText(/Aucune note ne correspond a "hello"/)
+      ).toBeInTheDocument();
+    });
+
+    it("should render clear search button when onClearSearch is provided", async () => {
+      const onClearSearch = vi.fn();
+      const user = userEvent.setup();
+
+      render(
+        <NotesList notes={[]} searchQuery="test" onClearSearch={onClearSearch} />
+      );
+
+      const clearButton = screen.getByRole("button", {
+        name: /effacer la recherche/i,
+      });
+      expect(clearButton).toBeInTheDocument();
+
+      await user.click(clearButton);
+      expect(onClearSearch).toHaveBeenCalled();
+    });
+
+    it("should not render clear search button if onClearSearch not provided", () => {
+      render(<NotesList notes={[]} searchQuery="test" />);
+
+      expect(
+        screen.queryByRole("button", { name: /effacer la recherche/i })
+      ).not.toBeInTheDocument();
+    });
+
+    it("should show empty state instead of no results when no searchQuery", () => {
+      render(<NotesList notes={[]} />);
+
+      expect(screen.getByText("Aucune note")).toBeInTheDocument();
+      expect(screen.queryByText("Aucun resultat")).not.toBeInTheDocument();
+    });
+  });
+
   describe("delete functionality", () => {
     it("should pass onDelete to NoteCard", async () => {
       const onDelete = vi.fn();

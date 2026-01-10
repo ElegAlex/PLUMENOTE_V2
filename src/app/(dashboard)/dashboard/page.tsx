@@ -37,6 +37,7 @@ export default function DashboardPage() {
 
   const {
     notes,
+    meta,
     isLoading,
     error,
     refetch,
@@ -60,6 +61,12 @@ export default function DashboardPage() {
 
   const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
+  }, []);
+
+  // Clear search input
+  const handleClearSearch = useCallback(() => {
+    setSearch("");
+    setDebouncedSearch("");
   }, []);
 
   // Create a new note and navigate to it
@@ -133,14 +140,26 @@ export default function DashboardPage() {
         </Button>
       </div>
 
+      {/* Search results info */}
+      {debouncedSearch && !isLoading && !error && notes.length > 0 && (
+        <p className="text-sm text-muted-foreground mb-4">
+          {meta?.total === 1
+            ? "1 resultat"
+            : `${meta?.total ?? notes.length} resultats`}{" "}
+          pour &quot;{debouncedSearch}&quot;
+        </p>
+      )}
+
       {/* Notes list */}
       <NotesList
         notes={notes}
         isLoading={isLoading}
         error={error}
+        searchQuery={debouncedSearch}
         onDelete={handleDeleteClick}
         onCreate={handleCreate}
         onRetry={refetch}
+        onClearSearch={handleClearSearch}
         deletingId={deletingId}
       />
 

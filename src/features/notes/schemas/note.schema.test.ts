@@ -279,4 +279,63 @@ describe("notesQuerySchema", () => {
       expect(result.success).toBe(false);
     });
   });
+
+  describe("search parameter", () => {
+    it("should accept search query", () => {
+      const result = notesQuerySchema.safeParse({ search: "hello world" });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.search).toBe("hello world");
+      }
+    });
+
+    it("should trim search query", () => {
+      const result = notesQuerySchema.safeParse({ search: "  hello  " });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.search).toBe("hello");
+      }
+    });
+
+    it("should transform empty search to undefined", () => {
+      const result = notesQuerySchema.safeParse({ search: "" });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.search).toBeUndefined();
+      }
+    });
+
+    it("should transform whitespace-only search to undefined", () => {
+      const result = notesQuerySchema.safeParse({ search: "   " });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.search).toBeUndefined();
+      }
+    });
+
+    it("should reject search exceeding 255 characters", () => {
+      const longSearch = "a".repeat(256);
+      const result = notesQuerySchema.safeParse({ search: longSearch });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.flatten().fieldErrors.search).toContain(
+          "Search query must be 255 characters or less"
+        );
+      }
+    });
+
+    it("should accept search at max length (255 chars)", () => {
+      const maxSearch = "a".repeat(255);
+      const result = notesQuerySchema.safeParse({ search: maxSearch });
+      expect(result.success).toBe(true);
+    });
+
+    it("should have undefined search by default", () => {
+      const result = notesQuerySchema.safeParse({});
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.search).toBeUndefined();
+      }
+    });
+  });
 });

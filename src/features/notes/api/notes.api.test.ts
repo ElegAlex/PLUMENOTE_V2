@@ -105,7 +105,13 @@ describe("Notes API", () => {
 
         expect(response.status).toBe(200);
         expect(json.data).toHaveLength(1);
-        expect(json.meta).toEqual({ total: 1, page: 1, pageSize: 20 });
+        expect(json.meta).toEqual({
+          total: 1,
+          page: 1,
+          pageSize: 20,
+          totalPages: 1,
+          search: undefined,
+        });
       });
 
       it("should respect custom pagination params", async () => {

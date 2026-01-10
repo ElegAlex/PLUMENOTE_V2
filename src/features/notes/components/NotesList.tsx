@@ -8,7 +8,7 @@
  * @see Story 3.3: Liste des Notes
  */
 
-import { FileText, Plus, AlertCircle } from "lucide-react";
+import { FileText, Plus, AlertCircle, Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { NoteCard } from "./NoteCard";
@@ -22,12 +22,16 @@ export interface NotesListProps {
   isLoading?: boolean;
   /** Error if fetch failed */
   error?: Error | null;
+  /** Current search query (for empty state message) */
+  searchQuery?: string;
   /** Callback when delete is clicked */
   onDelete?: (id: string) => void;
   /** Callback when create is clicked */
   onCreate?: () => void;
   /** Callback to retry fetch */
   onRetry?: () => void;
+  /** Callback to clear search */
+  onClearSearch?: () => void;
   /** ID of note being deleted */
   deletingId?: string | null;
   /** Additional CSS classes */
@@ -98,15 +102,47 @@ function NotesListError({ error, onRetry }: { error: Error; onRetry?: () => void
 }
 
 /**
+ * Empty state when search has no results
+ */
+function NotesListNoResults({
+  searchQuery,
+  onClearSearch,
+}: {
+  searchQuery: string;
+  onClearSearch?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="rounded-full bg-muted p-4 mb-4">
+        <Search className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h3 className="text-lg font-semibold mb-2">Aucun resultat</h3>
+      <p className="text-muted-foreground mb-6 max-w-sm">
+        Aucune note ne correspond a &quot;{searchQuery}&quot;.
+        <br />
+        Essayez avec d&apos;autres termes.
+      </p>
+      {onClearSearch && (
+        <Button onClick={onClearSearch} variant="outline">
+          Effacer la recherche
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
  * Grid list of note cards with loading, error, and empty states
  */
 export function NotesList({
   notes,
   isLoading = false,
   error,
+  searchQuery,
   onDelete,
   onCreate,
   onRetry,
+  onClearSearch,
   deletingId,
   className,
 }: NotesListProps) {
@@ -119,6 +155,15 @@ export function NotesList({
   }
 
   if (notes.length === 0) {
+    // Show different empty state based on whether user is searching
+    if (searchQuery) {
+      return (
+        <NotesListNoResults
+          searchQuery={searchQuery}
+          onClearSearch={onClearSearch}
+        />
+      );
+    }
     return <NotesListEmpty onCreate={onCreate} />;
   }
 

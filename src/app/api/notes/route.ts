@@ -20,7 +20,7 @@ import {
  * GET /api/notes
  *
  * List paginated notes for the authenticated user.
- * Query params: ?page=1&pageSize=20
+ * Query params: ?page=1&pageSize=20&search=query
  */
 export async function GET(request: NextRequest) {
   try {
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const queryResult = notesQuerySchema.safeParse({
       page: searchParams.get("page") ?? undefined,
       pageSize: searchParams.get("pageSize") ?? undefined,
+      search: searchParams.get("search") ?? undefined,
     });
 
     if (!queryResult.success) {
@@ -48,15 +49,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize } = queryResult.data;
+    const { page, pageSize, search } = queryResult.data;
     const { notes, total } = await getUserNotes(session.user.id, {
       page,
       pageSize,
+      search,
     });
+
+    const totalPages = Math.ceil(total / pageSize);
 
     return NextResponse.json({
       data: notes,
-      meta: { total, page, pageSize },
+      meta: { total, page, pageSize, totalPages, search },
     });
   } catch (error) {
     logger.error({ error }, "Error fetching notes");

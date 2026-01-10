@@ -66,10 +66,17 @@ export type NoteIdSchemaInput = z.infer<typeof noteIdSchema>;
  * Schema for notes list query parameters
  * - page: positive integer, defaults to 1
  * - pageSize: positive integer, max 100, defaults to 20
+ * - search: optional string, max 255 chars, trimmed
  */
 export const notesQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
+  search: z
+    .string()
+    .trim()
+    .max(255, "Search query must be 255 characters or less")
+    .optional()
+    .transform(emptyToUndefined),
 });
 
 export type NotesQuerySchemaInput = z.infer<typeof notesQuerySchema>;
