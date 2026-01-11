@@ -13,7 +13,9 @@ import { logger } from "@/lib/logger";
 import type {
   Folder,
   FolderWithChildren,
+  FolderWithNotesTree,
   FolderWithCount,
+  NoteInTree,
   CreateFolderInput,
   UpdateFolderInput,
 } from "../types";
@@ -147,6 +149,80 @@ export async function getUserFoldersTree(userId: string): Promise<FolderWithChil
 
   // Build tree from flat list
   return buildFolderTree(folders);
+}
+
+/**
+ * Get folders as hierarchical tree structure with notes included
+ * @see Story 5.4: Sidebar et Navigation Arborescente
+ */
+export async function getUserFoldersTreeWithNotes(userId: string): Promise<FolderWithNotesTree[]> {
+  // Fetch folders with their notes
+  const folders = await prisma.folder.findMany({
+    where: { createdById: userId },
+    select: {
+      ...folderSelect,
+      notes: {
+        select: {
+          id: true,
+          title: true,
+          isFavorite: true,
+          updatedAt: true,
+        },
+        orderBy: { title: "asc" },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  // Build tree from flat list including notes
+  return buildFolderTreeWithNotes(folders);
+}
+
+/**
+ * Build hierarchical tree from flat folder list with notes
+ */
+function buildFolderTreeWithNotes(
+  folders: (Folder & { notes: NoteInTree[] })[]
+): FolderWithNotesTree[] {
+  const folderMap = new Map<string, FolderWithNotesTree>();
+  const roots: FolderWithNotesTree[] = [];
+
+  // First pass: create all folder objects with empty children
+  for (const folder of folders) {
+    folderMap.set(folder.id, {
+      ...folder,
+      children: [],
+      notes: folder.notes,
+    });
+  }
+
+  // Second pass: build hierarchy
+  for (const folder of folders) {
+    const folderWithNotes = folderMap.get(folder.id)!;
+
+    if (folder.parentId === null) {
+      roots.push(folderWithNotes);
+    } else {
+      const parent = folderMap.get(folder.parentId);
+      if (parent) {
+        parent.children.push(folderWithNotes);
+      } else {
+        // Parent not found (shouldn't happen with proper constraints)
+        roots.push(folderWithNotes);
+      }
+    }
+  }
+
+  // Sort children recursively
+  const sortChildren = (items: FolderWithNotesTree[]): void => {
+    items.sort((a, b) => a.name.localeCompare(b.name));
+    for (const item of items) {
+      sortChildren(item.children);
+    }
+  };
+  sortChildren(roots);
+
+  return roots;
 }
 
 /**

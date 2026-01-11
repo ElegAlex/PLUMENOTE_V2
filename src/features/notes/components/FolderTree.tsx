@@ -3,21 +3,25 @@
 /**
  * FolderTree Component
  *
- * Displays a hierarchical tree of folders with expand/collapse state,
+ * Displays a hierarchical tree of folders and notes with expand/collapse state,
  * inline renaming, and folder management actions.
  *
  * @see Story 5.2: Création et Gestion des Dossiers
+ * @see Story 5.4: Sidebar et Navigation Arborescente
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { FolderPlus, AlertCircle, RefreshCw } from "lucide-react";
+import { FolderPlus, AlertCircle, RefreshCw, ChevronsUpDown, ChevronsDownUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFolders, folderKeys } from "../hooks/useFolders";
 import { FolderTreeItem } from "./FolderTreeItem";
 import { cn } from "@/lib/utils";
-import type { FolderWithChildren } from "../types";
+import type { FolderWithChildren, FolderWithNotesTree } from "../types";
+
+/** Type for folder tree nodes that may include notes */
+type FolderTreeNode = FolderWithChildren | FolderWithNotesTree;
 
 // LocalStorage key for expanded folders state
 const EXPANDED_FOLDERS_KEY = "plumenote:expanded-folders";
@@ -79,13 +83,13 @@ export function FolderTree({
   const [renameError, setRenameError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  // Fetch folders as tree structure
+  // Fetch folders as tree structure with notes included
   const {
     folders,
     isLoading,
     error,
     refetch,
-  } = useFolders({ tree: true });
+  } = useFolders({ tree: true, includeNotes: true });
 
   // Load expanded state from localStorage on mount
   useEffect(() => {
@@ -110,6 +114,32 @@ export function FolderTree({
       }
       return next;
     });
+  }, []);
+
+  // Collect all folder IDs recursively
+  const collectAllFolderIds = useCallback((folderList: FolderTreeNode[]): string[] => {
+    const ids: string[] = [];
+    const traverse = (items: FolderTreeNode[]) => {
+      for (const folder of items) {
+        ids.push(folder.id);
+        if (folder.children && folder.children.length > 0) {
+          traverse(folder.children as FolderTreeNode[]);
+        }
+      }
+    };
+    traverse(folderList);
+    return ids;
+  }, []);
+
+  // Expand all folders
+  const handleExpandAll = useCallback(() => {
+    const allIds = collectAllFolderIds(folders as unknown as FolderTreeNode[]);
+    setExpandedIds(new Set(allIds));
+  }, [folders, collectAllFolderIds]);
+
+  // Collapse all folders
+  const handleCollapseAll = useCallback(() => {
+    setExpandedIds(new Set());
   }, []);
 
   const handleSelect = useCallback(
@@ -167,7 +197,7 @@ export function FolderTree({
 
   // Render recursive folder tree
   const renderFolders = useCallback(
-    (folders: FolderWithChildren[], depth: number = 0) => {
+    (folders: FolderTreeNode[], depth: number = 0) => {
       return folders.map((folder) => (
         <FolderTreeItem
           key={folder.id}
@@ -175,6 +205,8 @@ export function FolderTree({
           depth={depth}
           isExpanded={expandedIds.has(folder.id)}
           isSelected={selectedFolderId === folder.id}
+          expandedIds={expandedIds}
+          selectedFolderId={selectedFolderId}
           onSelect={handleSelect}
           onExpand={handleExpand}
           onRename={handleRename}
@@ -246,27 +278,52 @@ export function FolderTree({
 
   return (
     <div className={cn("", className)}>
-      {/* Header with create button */}
+      {/* Header with actions */}
       <div className="flex items-center justify-between px-2 py-1.5 mb-1">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Dossiers
         </span>
-        {onCreateFolder && (
+        <div className="flex items-center gap-0.5">
+          {/* Expand/Collapse all buttons */}
           <Button
             variant="ghost"
             size="sm"
             className="h-6 w-6 p-0"
-            onClick={handleCreateRootFolder}
-            aria-label="Nouveau dossier"
+            onClick={handleExpandAll}
+            aria-label="Tout développer"
+            title="Tout développer"
           >
-            <FolderPlus className="h-4 w-4" />
+            <ChevronsUpDown className="h-3.5 w-3.5" />
           </Button>
-        )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={handleCollapseAll}
+            aria-label="Tout réduire"
+            title="Tout réduire"
+          >
+            <ChevronsDownUp className="h-3.5 w-3.5" />
+          </Button>
+          {/* Create folder button */}
+          {onCreateFolder && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={handleCreateRootFolder}
+              aria-label="Nouveau dossier"
+              title="Nouveau dossier"
+            >
+              <FolderPlus className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Folder tree */}
       <div role="tree" aria-label="Dossiers">
-        {renderFolders(folders as FolderWithChildren[])}
+        {renderFolders(folders as unknown as FolderTreeNode[])}
       </div>
     </div>
   );

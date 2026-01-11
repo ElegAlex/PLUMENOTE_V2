@@ -26,6 +26,27 @@ export interface FolderWithChildren extends Folder {
 }
 
 /**
+ * Simplified note type for tree display
+ * Note: updatedAt is string because JSON serialization converts Date to ISO string
+ * @see Story 5.4: Sidebar et Navigation Arborescente
+ */
+export interface NoteInTree {
+  id: string;
+  title: string;
+  isFavorite: boolean;
+  updatedAt: string;
+}
+
+/**
+ * Folder with children and notes for tree structure with notes
+ * @see Story 5.4: Sidebar et Navigation Arborescente
+ */
+export interface FolderWithNotesTree extends Folder {
+  children: FolderWithNotesTree[];
+  notes: NoteInTree[];
+}
+
+/**
  * Folder with note count for list display
  */
 export interface FolderWithCount extends Folder {

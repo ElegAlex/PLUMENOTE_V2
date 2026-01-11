@@ -31,17 +31,25 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import type { FolderWithChildren } from "../types";
+import { NoteTreeItem } from "./NoteTreeItem";
+import type { FolderWithChildren, FolderWithNotesTree } from "../types";
+
+/** Folder type that may or may not have notes */
+type FolderTreeNode = FolderWithChildren | FolderWithNotesTree;
 
 export interface FolderTreeItemProps {
-  /** The folder to display */
-  folder: FolderWithChildren;
+  /** The folder to display (may include notes) */
+  folder: FolderTreeNode;
   /** Nesting depth (0 for root level) */
   depth?: number;
   /** Whether the folder is expanded */
   isExpanded?: boolean;
   /** Whether the folder is selected */
   isSelected?: boolean;
+  /** Set of expanded folder IDs (for recursive rendering) */
+  expandedIds?: Set<string>;
+  /** Currently selected folder ID (for recursive rendering) */
+  selectedFolderId?: string | null;
   /** Callback when folder is clicked */
   onSelect?: (folderId: string) => void;
   /** Callback when expand/collapse is toggled */
@@ -71,6 +79,8 @@ export function FolderTreeItem({
   depth = 0,
   isExpanded = false,
   isSelected = false,
+  expandedIds,
+  selectedFolderId,
   onSelect,
   onExpand,
   onRename,
@@ -88,6 +98,7 @@ export function FolderTreeItem({
   const itemRef = useRef<HTMLDivElement>(null);
 
   const hasChildren = folder.children && folder.children.length > 0;
+  const hasNotes = "notes" in folder && folder.notes && folder.notes.length > 0;
 
   // Focus input when editing starts
   useEffect(() => {
@@ -96,12 +107,6 @@ export function FolderTreeItem({
       inputRef.current.select();
     }
   }, [isEditing]);
-
-  // Reset edit value when folder name changes
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setEditValue(folder.name);
-  }, [folder.name]);
 
   const handleClick = useCallback(() => {
     if (!isEditing) {
@@ -119,9 +124,11 @@ export function FolderTreeItem({
 
   const handleDoubleClick = useCallback(() => {
     if (onRename) {
+      // Reset edit value to current folder name when starting edit
+      setEditValue(folder.name);
       setIsEditing(true);
     }
-  }, [onRename]);
+  }, [onRename, folder.name]);
 
   const handleRenameSubmit = useCallback(() => {
     const trimmedValue = editValue.trim();
@@ -171,6 +178,7 @@ export function FolderTreeItem({
         case "F2":
           e.preventDefault();
           if (onRename) {
+            setEditValue(folder.name);
             setIsEditing(true);
           }
           break;
@@ -191,6 +199,7 @@ export function FolderTreeItem({
       onRename,
       onDelete,
       folder.id,
+      folder.name,
     ]
   );
 
@@ -212,8 +221,10 @@ export function FolderTreeItem({
   }, [handleRenameSubmit]);
 
   const startRename = useCallback(() => {
+    // Reset edit value to current folder name when starting edit from menu
+    setEditValue(folder.name);
     setIsEditing(true);
-  }, []);
+  }, [folder.name]);
 
   const handleCreateSubfolder = useCallback(() => {
     onCreateSubfolder?.(folder.id);
@@ -290,7 +301,7 @@ export function FolderTreeItem({
           type="button"
           className={cn(
             "shrink-0 h-5 w-5 p-0 flex items-center justify-center rounded hover:bg-accent-foreground/10",
-            !hasChildren && "invisible"
+            !hasChildren && !hasNotes && "invisible"
           )}
           onClick={handleExpandClick}
           tabIndex={-1}
@@ -374,16 +385,19 @@ export function FolderTreeItem({
         )}
       </div>
 
-      {/* Render children recursively if expanded */}
-      {hasChildren && isExpanded && (
+      {/* Render children and notes recursively if expanded */}
+      {isExpanded && (hasChildren || hasNotes) && (
         <div role="group" aria-label={`Contenu de ${folder.name}`}>
+          {/* Subfolders first */}
           {folder.children.map((child) => (
             <FolderTreeItem
               key={child.id}
               folder={child}
               depth={depth + 1}
-              isExpanded={isExpanded}
-              isSelected={isSelected}
+              isExpanded={expandedIds ? expandedIds.has(child.id) : false}
+              isSelected={selectedFolderId === child.id}
+              expandedIds={expandedIds}
+              selectedFolderId={selectedFolderId}
               onSelect={onSelect}
               onExpand={onExpand}
               onRename={onRename}
@@ -394,6 +408,11 @@ export function FolderTreeItem({
               isDeleting={isDeleting}
             />
           ))}
+          {/* Notes after subfolders */}
+          {hasNotes &&
+            (folder as FolderWithNotesTree).notes.map((note) => (
+              <NoteTreeItem key={note.id} note={note} depth={depth + 1} />
+            ))}
         </div>
       )}
     </div>

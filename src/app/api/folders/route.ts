@@ -15,6 +15,7 @@ import {
   createFolder,
   getUserFolders,
   getUserFoldersTree,
+  getUserFoldersTreeWithNotes,
 } from "@/features/notes/services/folders.service";
 import {
   createFolderSchema,
@@ -28,6 +29,8 @@ import {
  * Query params:
  * - tree=true: Returns hierarchical tree structure
  * - parentId: Filter by parent folder (null for root only)
+ * - includeNotes=true: Include notes in tree structure (requires tree=true)
+ * @see Story 5.4: Sidebar et Navigation Arborescente
  */
 export async function GET(request: NextRequest) {
   try {
@@ -44,6 +47,7 @@ export async function GET(request: NextRequest) {
     const queryResult = foldersQuerySchema.safeParse({
       tree: searchParams.get("tree") ?? undefined,
       parentId: searchParams.get("parentId") ?? undefined,
+      includeNotes: searchParams.get("includeNotes") ?? undefined,
     });
 
     if (!queryResult.success) {
@@ -55,7 +59,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { tree } = queryResult.data;
+    const { tree, includeNotes } = queryResult.data;
+
+    // Return tree structure with notes if requested
+    if (tree && includeNotes) {
+      const folders = await getUserFoldersTreeWithNotes(session.user.id);
+      return NextResponse.json({ data: folders });
+    }
 
     // Return tree structure if requested
     if (tree) {

@@ -7,7 +7,9 @@ export type {
   Tag,
   Folder,
   FolderWithChildren,
+  FolderWithNotesTree,
   FolderWithCount,
+  NoteInTree,
   CreateNoteInput,
   UpdateNoteInput,
   CreateFolderInput,
@@ -78,12 +80,13 @@ export {
   deleteTag,
 } from "./services/tags.service";
 
-// Service - Folders (Story 5.1)
+// Service - Folders (Story 5.1, 5.4)
 export {
   createFolder,
   getFolderById,
   getUserFolders,
   getUserFoldersTree,
+  getUserFoldersTreeWithNotes,
   updateFolder,
   deleteFolder,
   getFolderPath,
@@ -107,3 +110,4 @@ export { FolderTreeItem, type FolderTreeItemProps } from "./components/FolderTre
 export { CreateFolderDialog, type CreateFolderDialogProps } from "./components/CreateFolderDialog";
 export { DeleteFolderDialog, type DeleteFolderDialogProps } from "./components/DeleteFolderDialog";
 export { MoveToFolderDialog, type MoveToFolderDialogProps } from "./components/MoveToFolderDialog";
+export { NoteTreeItem, type NoteTreeItemProps } from "./components/NoteTreeItem";

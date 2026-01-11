@@ -13,12 +13,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Folder,
   FolderWithChildren,
+  FolderWithNotesTree,
   FolderWithCount,
   CreateFolderInput,
 } from "../types";
 
 /**
  * Query key factory for folders
+ * @see Story 5.4: Sidebar et Navigation Arborescente
  */
 export const folderKeys = {
   all: ["folders"] as const,
@@ -26,6 +28,8 @@ export const folderKeys = {
   list: () => folderKeys.lists(),
   trees: () => [...folderKeys.all, "tree"] as const,
   tree: () => folderKeys.trees(),
+  treesWithNotes: () => [...folderKeys.all, "treeWithNotes"] as const,
+  treeWithNotes: () => folderKeys.treesWithNotes(),
   details: () => [...folderKeys.all, "detail"] as const,
   detail: (id: string) => [...folderKeys.details(), id] as const,
 };
@@ -36,6 +40,10 @@ interface FoldersListResponse {
 
 interface FoldersTreeResponse {
   data: FolderWithChildren[];
+}
+
+interface FoldersTreeWithNotesResponse {
+  data: FolderWithNotesTree[];
 }
 
 interface FolderResponse {
@@ -81,6 +89,28 @@ async function fetchFoldersTree(): Promise<FolderWithChildren[]> {
   }
 
   const data: FoldersTreeResponse = await response.json();
+  return data.data;
+}
+
+/**
+ * Fetch all folders for the current user (hierarchical tree with notes)
+ * @see Story 5.4: Sidebar et Navigation Arborescente
+ */
+async function fetchFoldersTreeWithNotes(): Promise<FolderWithNotesTree[]> {
+  const response = await fetch("/api/folders?tree=true&includeNotes=true");
+
+  if (!response.ok) {
+    let errorMessage = "Erreur lors du chargement des dossiers";
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || errorMessage;
+    } catch {
+      errorMessage = response.statusText || errorMessage;
+    }
+    throw new Error(errorMessage);
+  }
+
+  const data: FoldersTreeWithNotesResponse = await response.json();
   return data.data;
 }
 
@@ -134,6 +164,8 @@ async function deleteFolder(id: string): Promise<void> {
 export interface UseFoldersOptions {
   /** Whether to fetch as tree structure */
   tree?: boolean;
+  /** Whether to include notes in tree structure (requires tree=true) */
+  includeNotes?: boolean;
   /** Whether to fetch immediately */
   enabled?: boolean;
 }
@@ -149,6 +181,9 @@ export interface UseFoldersOptions {
  * // Hierarchical tree
  * const { folders, isLoading } = useFolders({ tree: true });
  *
+ * // Hierarchical tree with notes included
+ * const { folders, isLoading } = useFolders({ tree: true, includeNotes: true });
+ *
  * // Create a new folder
  * createFolder({ name: "Nouveau dossier" });
  *
@@ -160,7 +195,7 @@ export interface UseFoldersOptions {
  * ```
  */
 export function useFolders(options: UseFoldersOptions = {}) {
-  const { tree = false, enabled = true } = options;
+  const { tree = false, includeNotes = false, enabled = true } = options;
   const queryClient = useQueryClient();
 
   // Query for fetching folders list (flat)
@@ -175,12 +210,22 @@ export function useFolders(options: UseFoldersOptions = {}) {
   const treeQuery = useQuery({
     queryKey: folderKeys.tree(),
     queryFn: fetchFoldersTree,
-    enabled: enabled && tree,
+    enabled: enabled && tree && !includeNotes,
+    staleTime: 60 * 1000, // 1 minute
+  });
+
+  // Query for fetching folders tree with notes
+  const treeWithNotesQuery = useQuery({
+    queryKey: folderKeys.treeWithNotes(),
+    queryFn: fetchFoldersTreeWithNotes,
+    enabled: enabled && tree && includeNotes,
     staleTime: 60 * 1000, // 1 minute
   });
 
   // Use the appropriate query based on mode
-  const query = tree ? treeQuery : listQuery;
+  const query = tree
+    ? (includeNotes ? treeWithNotesQuery : treeQuery)
+    : listQuery;
 
   // Mutation for creating a folder
   const createMutation = useMutation({

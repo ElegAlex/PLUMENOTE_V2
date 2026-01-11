@@ -59,6 +59,8 @@ export type FolderIdSchemaInput = z.infer<typeof folderIdSchema>;
  * Schema for folders list query parameters
  * - tree: optional boolean, if true returns hierarchical tree structure
  * - parentId: optional CUID, filter folders by parent (null = root level only)
+ * - includeNotes: optional boolean, if true includes notes in tree structure
+ * @see Story 5.4: Sidebar et Navigation Arborescente
  */
 export const foldersQuerySchema = z.object({
   tree: z
@@ -69,6 +71,10 @@ export const foldersQuerySchema = z.object({
     .string()
     .cuid("Invalid parent folder ID format")
     .nullable()
+    .optional(),
+  includeNotes: z
+    .string()
+    .transform((val) => val === "true")
     .optional(),
 });
 
