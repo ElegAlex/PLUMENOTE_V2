@@ -131,6 +131,9 @@ model Note {
   isFavorite   Boolean   @default(false)  // Pin/favorite notes
   sortOrder    Int       @default(0)       // Custom sort order (lower = first)
 
+  // Story 3.5: Soft delete support
+  deletedAt    DateTime?                   // Soft delete timestamp (null = not deleted)
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -149,6 +152,7 @@ model Note {
   @@index([updatedAt])
   @@index([isFavorite])
   @@index([sortOrder])
+  @@index([deletedAt])
 }
 
 // ============================================

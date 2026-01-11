@@ -153,6 +153,37 @@ describe("useAutoSave", () => {
     expect(onSave).toHaveBeenCalledWith({ title: "Test" });
   });
 
+  it("should return true from flush when data was saved", async () => {
+    const onSave = vi.fn();
+    const { result } = renderHook(() => useAutoSave(onSave, { delay: 1000 }));
+
+    act(() => {
+      result.current.save({ title: "Test" });
+    });
+
+    let wasSaved = false;
+    await act(async () => {
+      wasSaved = await result.current.flush();
+    });
+
+    expect(wasSaved).toBe(true);
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("should return false from flush when nothing was pending", async () => {
+    const onSave = vi.fn();
+    const { result } = renderHook(() => useAutoSave(onSave, { delay: 1000 }));
+
+    // No save called, directly flush
+    let wasSaved = true;
+    await act(async () => {
+      wasSaved = await result.current.flush();
+    });
+
+    expect(wasSaved).toBe(false);
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("should cancel pending save", async () => {
     const onSave = vi.fn();
     const { result } = renderHook(() => useAutoSave(onSave, { delay: 1000 }));

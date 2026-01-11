@@ -14,7 +14,7 @@ import { fr } from "date-fns/locale";
 import { MoreHorizontal, Trash2, Edit, Star } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { TagChip } from "./TagChip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -192,19 +192,17 @@ export function NoteCard({
           )}
         </Link>
 
-        {/* Tags */}
+        {/* Tags (Story 3.6) - max 3 visible, then +N indicator */}
         {note.tags && note.tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {note.tags.map((tag) => (
-              <Badge
-                key={tag.id}
-                variant="secondary"
-                className="text-xs"
-                style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
-              >
-                {tag.name}
-              </Badge>
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {note.tags.slice(0, 3).map((tag) => (
+              <TagChip key={tag.id} tag={tag} variant="compact" />
             ))}
+            {note.tags.length > 3 && (
+              <span className="text-[10px] text-muted-foreground font-medium px-1">
+                +{note.tags.length - 3}
+              </span>
+            )}
           </div>
         )}
 

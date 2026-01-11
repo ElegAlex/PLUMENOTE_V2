@@ -61,6 +61,7 @@ export default function DashboardPage() {
     createNoteAsync,
     isCreating,
     deleteNoteAsync,
+    restoreNoteAsync,
     toggleFavorite,
     isTogglingFavorite,
   } = useNotes({ search: debouncedSearch, favoriteOnly, sortBy, sortDir });
@@ -128,16 +129,32 @@ export default function DashboardPage() {
     setDeleteId(id);
   }, []);
 
-  // Execute delete
+  // Execute delete (soft delete with undo option)
+  // @see Story 3.5: Suppression d'une Note
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteId) return;
 
+    const noteIdToDelete = deleteId;
     setDeletingId(deleteId);
     setDeleteId(null);
 
     try {
-      await deleteNoteAsync(deleteId);
-      toast.success("Note supprimee");
+      await deleteNoteAsync(noteIdToDelete);
+      // Toast with undo button (30 seconds)
+      toast.success("Note supprimee", {
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            try {
+              await restoreNoteAsync(noteIdToDelete);
+              toast.success("Note restauree");
+            } catch {
+              toast.error("Echec de la restauration");
+            }
+          },
+        },
+        duration: 30000, // 30 seconds for undo
+      });
     } catch (err) {
       console.error("Failed to delete note:", err);
       toast.error("Echec de la suppression", {
@@ -146,7 +163,7 @@ export default function DashboardPage() {
     } finally {
       setDeletingId(null);
     }
-  }, [deleteId, deleteNoteAsync]);
+  }, [deleteId, deleteNoteAsync, restoreNoteAsync]);
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-8">
@@ -259,7 +276,7 @@ export default function DashboardPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Supprimer cette note?</AlertDialogTitle>
             <AlertDialogDescription>
-              Cette action est irreversible. La note sera definitivement supprimee.
+              La note sera supprimee. Vous aurez 30 secondes pour annuler cette action.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

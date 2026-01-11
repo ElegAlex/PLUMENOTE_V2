@@ -7,20 +7,39 @@
  * Auto-saves changes with debounce.
  *
  * @see Story 3.2: Editeur Tiptap Markdown de Base
+ * @see Story 3.3: Creation d'une Nouvelle Note
+ * @see Story 3.4: Sauvegarde Automatique des Notes
+ * @see Story 3.5: Suppression d'une Note
  * @see FR8: Un utilisateur peut editer une note en Markdown avec previsualisation live
  */
 
-import { use, useCallback } from "react";
+import { use, useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { EditorToolbar } from "@/features/editor";
-import { useNote } from "@/features/notes/hooks/useNote";
-import { useAutoSave } from "@/features/notes/hooks/useAutoSave";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useState, useEffect, useRef, useMemo } from "react";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
+
+import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
+import { EditorToolbar } from "@/features/editor";
+import { useNote } from "@/features/notes/hooks/useNote";
+import { useNotes } from "@/features/notes/hooks/useNotes";
+import { useAutoSave } from "@/features/notes/hooks/useAutoSave";
+import { NoteHeader, type SaveStatus } from "@/features/notes/components/NoteHeader";
+import { TagsPanel } from "@/features/notes/components/TagsPanel";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { UpdateNoteInput } from "@/features/notes/types";
 
 interface NotePageProps {
@@ -31,11 +50,33 @@ export default function NotePage({ params }: NotePageProps) {
   const { id } = use(params);
   const router = useRouter();
   const { note, isLoading, error, updateNoteAsync } = useNote(id);
+  const { deleteNoteAsync, restoreNoteAsync } = useNotes({ enabled: false });
+  const isOnline = useOnlineStatus();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Track user edits separately from the loaded note
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
   const [isEditorReady, setIsEditorReady] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const contentInitializedRef = useRef(false);
+  const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const flushRef = useRef<(() => Promise<boolean>) | null>(null);
+
+  // Cleanup timeout on unmount to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (saveStatusTimeoutRef.current) {
+        clearTimeout(saveStatusTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Check if this is a newly created note (title is default "Sans titre" and no content)
+  const isNewNote = useMemo(() => {
+    if (!note) return false;
+    return note.title === "Sans titre" && (!note.content || note.content === "");
+  }, [note]);
 
   // Derive displayed values: use edited value if user has made changes, otherwise use note data
   const title = useMemo(
@@ -43,22 +84,61 @@ export default function NotePage({ params }: NotePageProps) {
     [editedTitle, note?.title]
   );
 
-  // Auto-save handler
+  // Auto-save handler with status tracking
   const handleSave = useCallback(
     async (data: UpdateNoteInput) => {
+      setSaveStatus("saving");
+      // Clear any pending timeout
+      if (saveStatusTimeoutRef.current) {
+        clearTimeout(saveStatusTimeoutRef.current);
+      }
       try {
         await updateNoteAsync(data);
+        setSaveStatus("saved");
+        // Reset to idle after 2 seconds (with cleanup ref)
+        saveStatusTimeoutRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
       } catch (err) {
         console.error("Failed to save note:", err);
+        setSaveStatus("error");
         toast.error("Echec de la sauvegarde", {
           description: "Vos modifications n'ont pas pu etre enregistrees.",
+          action: {
+            label: "Reessayer",
+            onClick: () => flushRef.current?.(),
+          },
         });
       }
     },
     [updateNoteAsync]
   );
 
-  const { save: autoSave } = useAutoSave(handleSave, { delay: 1000 });
+  const { save: autoSave, flush } = useAutoSave(handleSave, { delay: 2000 });
+
+  // Store flush in ref for toast retry button
+  useEffect(() => {
+    flushRef.current = flush;
+  }, [flush]);
+
+  // Compute display save status (offline takes precedence)
+  const displaySaveStatus: SaveStatus = useMemo(() => {
+    if (!isOnline) return "offline";
+    return saveStatus;
+  }, [isOnline, saveStatus]);
+
+  // Keyboard shortcut: Ctrl+S to force save
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        const wasSaved = await flush();
+        if (wasSaved) {
+          toast.success("Note sauvegardee");
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [flush]);
 
   // Initialize editor with Placeholder extension
   const editor = useEditor({
@@ -111,6 +191,53 @@ export default function NotePage({ params }: NotePageProps) {
     },
     [autoSave]
   );
+
+  // Handle tags change (Story 3.6)
+  const handleTagsChange = useCallback(
+    (tagIds: string[]) => {
+      // Tags are saved immediately (not debounced)
+      updateNoteAsync({ tagIds }).catch((err) => {
+        console.error("Failed to update tags:", err);
+        toast.error("Echec de la mise a jour des tags");
+      });
+    },
+    [updateNoteAsync]
+  );
+
+  // Handle delete confirmation (Story 3.5)
+  const handleDeleteConfirm = useCallback(async () => {
+    setShowDeleteDialog(false);
+    setIsDeleting(true);
+
+    try {
+      await deleteNoteAsync(id);
+      // Redirect to dashboard first
+      router.push("/dashboard");
+      // Then show toast with undo option
+      toast.success("Note supprimee", {
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            try {
+              await restoreNoteAsync(id);
+              toast.success("Note restauree");
+              // Optionally navigate back to the note
+              router.push(`/notes/${id}`);
+            } catch {
+              toast.error("Echec de la restauration");
+            }
+          },
+        },
+        duration: 30000, // 30 seconds for undo
+      });
+    } catch (err) {
+      console.error("Failed to delete note:", err);
+      toast.error("Echec de la suppression", {
+        description: "Impossible de supprimer la note.",
+      });
+      setIsDeleting(false);
+    }
+  }, [id, deleteNoteAsync, restoreNoteAsync, router]);
 
   // Handle loading state
   if (isLoading) {
@@ -165,14 +292,34 @@ export default function NotePage({ params }: NotePageProps) {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      {/* Note Title */}
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => handleTitleChange(e.target.value)}
-        placeholder="Sans titre"
-        className="mb-4 w-full border-none bg-transparent text-3xl font-bold outline-none placeholder:text-muted-foreground focus:ring-0"
-        aria-label="Note title"
+      {/* Note Header with Title, Save Status, and Delete Button */}
+      <div className="mb-4 flex items-start gap-4">
+        <div className="flex-1">
+          <NoteHeader
+            title={title}
+            onTitleChange={handleTitleChange}
+            saveStatus={displaySaveStatus}
+            isNewNote={isNewNote}
+          />
+        </div>
+        {/* Delete button (Story 3.5) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowDeleteDialog(true)}
+          disabled={isDeleting}
+          className="text-muted-foreground hover:text-destructive"
+          aria-label="Supprimer la note"
+        >
+          <Trash2 className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* Tags Panel (Story 3.6) */}
+      <TagsPanel
+        tags={note.tags ?? []}
+        onTagsChange={handleTagsChange}
+        className="mb-4"
       />
 
       {/* Editor Toolbar */}
@@ -186,6 +333,27 @@ export default function NotePage({ params }: NotePageProps) {
           <Skeleton className="h-64 w-full" />
         )}
       </div>
+
+      {/* Delete confirmation dialog (Story 3.5) */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer cette note?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La note sera supprimee. Vous aurez 30 secondes pour annuler cette action.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

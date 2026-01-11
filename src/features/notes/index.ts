@@ -68,3 +68,4 @@ export { useAutoSave, type UseAutoSaveOptions } from "./hooks/useAutoSave";
 // Components
 export { NoteCard, type NoteCardProps } from "./components/NoteCard";
 export { NotesList, type NotesListProps } from "./components/NotesList";
+export { NoteHeader, type NoteHeaderProps, type SaveStatus } from "./components/NoteHeader";

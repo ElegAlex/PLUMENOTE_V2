@@ -35,6 +35,8 @@ import {
   getUserNotes,
   updateNote,
   deleteNote,
+  restoreNote,
+  toggleNoteFavorite,
 } from "./notes.service";
 import { prisma } from "@/lib/prisma";
 import { NotFoundError, ForbiddenError } from "@/lib/api-error";
@@ -257,9 +259,22 @@ describe("notes.service", () => {
       ).rejects.toThrow("You do not have permission to update this note");
     });
 
+    // Story 3.5: Prevent updates to deleted notes
+    it("should throw NotFoundError when note is deleted", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+        deletedAt: new Date(),
+      });
+
+      await expect(
+        updateNote("note-123", "user-1", { title: "Test" })
+      ).rejects.toThrow(NotFoundError);
+    });
+
     it("should only update provided fields", async () => {
       vi.mocked(prisma.note.findUnique).mockResolvedValue({
         createdById: "user-1",
+        deletedAt: null,
       });
       vi.mocked(prisma.note.update).mockResolvedValue(mockNote);
 
@@ -275,6 +290,7 @@ describe("notes.service", () => {
     it("should update both title and content when provided", async () => {
       vi.mocked(prisma.note.findUnique).mockResolvedValue({
         createdById: "user-1",
+        deletedAt: null,
       });
       vi.mocked(prisma.note.update).mockResolvedValue(mockNote);
 
@@ -291,17 +307,45 @@ describe("notes.service", () => {
     });
   });
 
-  describe("deleteNote", () => {
-    it("should delete note when user is owner", async () => {
+  // Story 3.5: toggleNoteFavorite tests with deleted note check
+  describe("toggleNoteFavorite", () => {
+    it("should throw NotFoundError when note is deleted", async () => {
       vi.mocked(prisma.note.findUnique).mockResolvedValue({
         createdById: "user-1",
+        isFavorite: false,
+        deletedAt: new Date(),
       });
-      vi.mocked(prisma.note.delete).mockResolvedValue({} as never);
+
+      await expect(toggleNoteFavorite("note-123", "user-1")).rejects.toThrow(
+        NotFoundError
+      );
+    });
+  });
+
+  describe("deleteNote", () => {
+    // Story 3.5: Soft delete tests
+    it("should soft delete note when user is owner (set deletedAt)", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+        deletedAt: null,
+      });
+      vi.mocked(prisma.note.update).mockResolvedValue({} as never);
 
       await expect(deleteNote("note-123", "user-1")).resolves.toBeUndefined();
-      expect(prisma.note.delete).toHaveBeenCalledWith({
+      expect(prisma.note.update).toHaveBeenCalledWith({
         where: { id: "note-123" },
+        data: { deletedAt: expect.any(Date) },
       });
+    });
+
+    it("should be no-op if note is already deleted", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+        deletedAt: new Date(),
+      });
+
+      await expect(deleteNote("note-123", "user-1")).resolves.toBeUndefined();
+      expect(prisma.note.update).not.toHaveBeenCalled();
     });
 
     it("should throw NotFoundError when note does not exist", async () => {
@@ -318,6 +362,7 @@ describe("notes.service", () => {
     it("should throw ForbiddenError when user is not owner", async () => {
       vi.mocked(prisma.note.findUnique).mockResolvedValue({
         createdById: "other-user",
+        deletedAt: null,
       });
 
       await expect(deleteNote("note-123", "user-1")).rejects.toThrow(
@@ -325,6 +370,52 @@ describe("notes.service", () => {
       );
       await expect(deleteNote("note-123", "user-1")).rejects.toThrow(
         "You do not have permission to delete this note"
+      );
+    });
+  });
+
+  // Story 3.5: Restore tests
+  describe("restoreNote", () => {
+    it("should restore soft-deleted note when user is owner", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+        deletedAt: new Date(),
+      });
+      vi.mocked(prisma.note.update).mockResolvedValue({} as never);
+
+      await expect(restoreNote("note-123", "user-1")).resolves.toBeUndefined();
+      expect(prisma.note.update).toHaveBeenCalledWith({
+        where: { id: "note-123" },
+        data: { deletedAt: null },
+      });
+    });
+
+    it("should be no-op if note is not deleted", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "user-1",
+        deletedAt: null,
+      });
+
+      await expect(restoreNote("note-123", "user-1")).resolves.toBeUndefined();
+      expect(prisma.note.update).not.toHaveBeenCalled();
+    });
+
+    it("should throw NotFoundError when note does not exist", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue(null);
+
+      await expect(restoreNote("nonexistent", "user-1")).rejects.toThrow(
+        NotFoundError
+      );
+    });
+
+    it("should throw ForbiddenError when user is not owner", async () => {
+      vi.mocked(prisma.note.findUnique).mockResolvedValue({
+        createdById: "other-user",
+        deletedAt: new Date(),
+      });
+
+      await expect(restoreNote("note-123", "user-1")).rejects.toThrow(
+        ForbiddenError
       );
     });
   });

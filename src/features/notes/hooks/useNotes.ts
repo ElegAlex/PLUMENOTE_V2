@@ -128,7 +128,9 @@ async function createNote(input: CreateNoteInput = {}): Promise<Note> {
 }
 
 /**
- * Delete a note by ID
+ * Delete a note by ID (soft delete)
+ *
+ * @see Story 3.5: Suppression d'une Note
  */
 async function deleteNote(id: string): Promise<void> {
   const response = await fetch(`/api/notes/${id}`, {
@@ -137,6 +139,28 @@ async function deleteNote(id: string): Promise<void> {
 
   if (!response.ok) {
     let errorMessage = "Failed to delete note";
+    try {
+      const error = await response.json();
+      errorMessage = error.detail || errorMessage;
+    } catch {
+      errorMessage = response.statusText || errorMessage;
+    }
+    throw new Error(errorMessage);
+  }
+}
+
+/**
+ * Restore a soft-deleted note
+ *
+ * @see Story 3.5: Suppression d'une Note
+ */
+async function restoreNote(id: string): Promise<void> {
+  const response = await fetch(`/api/notes/${id}/restore`, {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to restore note";
     try {
       const error = await response.json();
       errorMessage = error.detail || errorMessage;
@@ -198,13 +222,22 @@ export function useNotes(options: UseNotesOptions = {}) {
     },
   });
 
-  // Mutation for deleting a note
+  // Mutation for deleting a note (soft delete)
   const deleteMutation = useMutation({
     mutationFn: deleteNote,
     onSuccess: (_, deletedId) => {
       // Remove from cache
       queryClient.removeQueries({ queryKey: noteKeys.detail(deletedId) });
       // Invalidate list queries to refresh
+      queryClient.invalidateQueries({ queryKey: noteKeys.lists() });
+    },
+  });
+
+  // Mutation for restoring a soft-deleted note (Story 3.5)
+  const restoreMutation = useMutation({
+    mutationFn: restoreNote,
+    onSuccess: () => {
+      // Invalidate list queries to refresh (note will reappear)
       queryClient.invalidateQueries({ queryKey: noteKeys.lists() });
     },
   });
@@ -243,10 +276,18 @@ export function useNotes(options: UseNotesOptions = {}) {
     isDeleting: deleteMutation.isPending,
     /** Error if delete failed */
     deleteError: deleteMutation.error as Error | null,
-    /** Delete a note */
+    /** Delete a note (soft delete) */
     deleteNote: deleteMutation.mutate,
-    /** Delete a note (async) */
+    /** Delete a note (async, soft delete) */
     deleteNoteAsync: deleteMutation.mutateAsync,
+    /** Whether a note is being restored */
+    isRestoring: restoreMutation.isPending,
+    /** Error if restore failed */
+    restoreError: restoreMutation.error as Error | null,
+    /** Restore a soft-deleted note */
+    restoreNote: restoreMutation.mutate,
+    /** Restore a soft-deleted note (async) */
+    restoreNoteAsync: restoreMutation.mutateAsync,
     /** Whether favorite is being toggled */
     isTogglingFavorite: favoriteMutation.isPending,
     /** Error if toggle failed */

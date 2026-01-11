@@ -85,7 +85,8 @@ export function useAutoSave<T extends Record<string, unknown>>(
   );
 
   // Flush pending save immediately
-  const flush = useCallback(async () => {
+  // Returns true if a save was performed, false if nothing was pending
+  const flush = useCallback(async (): Promise<boolean> => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
@@ -96,10 +97,12 @@ export function useAutoSave<T extends Record<string, unknown>>(
       try {
         await onSave(pendingDataRef.current);
         pendingDataRef.current = null;
+        return true;
       } finally {
         isSavingRef.current = false;
       }
     }
+    return false;
   }, [onSave]);
 
   // Cancel pending save

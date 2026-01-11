@@ -96,16 +96,26 @@ export async function createNote(
 /**
  * Get a note by ID with ownership verification
  *
- * @throws {NotFoundError} If note doesn't exist
+ * Excludes soft-deleted notes (Story 3.5).
+ *
+ * @throws {NotFoundError} If note doesn't exist or is deleted
  * @throws {ForbiddenError} If user doesn't own the note
  */
 export async function getNoteById(noteId: string, userId: string): Promise<Note> {
   const note = await prisma.note.findUnique({
     where: { id: noteId },
-    select: noteWithTagsSelect,
+    select: {
+      ...noteWithTagsSelect,
+      deletedAt: true,
+    },
   });
 
   if (!note) {
+    throw new NotFoundError(`Note with ID '${noteId}' not found`);
+  }
+
+  // Treat deleted notes as not found (Story 3.5)
+  if (note.deletedAt) {
     throw new NotFoundError(`Note with ID '${noteId}' not found`);
   }
 
@@ -155,8 +165,10 @@ export async function getUserNotes(
   const skip = (page - 1) * pageSize;
 
   // Build where clause with optional filters
+  // Exclude soft-deleted notes (Story 3.5)
   const where = {
     createdById: userId,
+    deletedAt: null, // Exclude soft-deleted notes
     ...(search && {
       OR: [
         { title: { contains: search, mode: "insensitive" as const } },
@@ -203,7 +215,9 @@ export async function getUserNotes(
 /**
  * Update a note with ownership verification
  *
- * @throws {NotFoundError} If note doesn't exist
+ * Excludes soft-deleted notes (Story 3.5).
+ *
+ * @throws {NotFoundError} If note doesn't exist or is deleted
  * @throws {ForbiddenError} If user doesn't own the note
  */
 export async function updateNote(
@@ -211,13 +225,18 @@ export async function updateNote(
   userId: string,
   data: UpdateNoteInput
 ): Promise<Note> {
-  // Verify ownership first
+  // Verify ownership and not deleted
   const existing = await prisma.note.findUnique({
     where: { id: noteId },
-    select: { createdById: true },
+    select: { createdById: true, deletedAt: true },
   });
 
   if (!existing) {
+    throw new NotFoundError(`Note with ID '${noteId}' not found`);
+  }
+
+  // Treat deleted notes as not found (Story 3.5)
+  if (existing.deletedAt) {
     throw new NotFoundError(`Note with ID '${noteId}' not found`);
   }
 
@@ -253,7 +272,9 @@ export async function updateNote(
 /**
  * Toggle favorite status for a note
  *
- * @throws {NotFoundError} If note doesn't exist
+ * Excludes soft-deleted notes (Story 3.5).
+ *
+ * @throws {NotFoundError} If note doesn't exist or is deleted
  * @throws {ForbiddenError} If user doesn't own the note
  */
 export async function toggleNoteFavorite(
@@ -263,10 +284,15 @@ export async function toggleNoteFavorite(
   // Get current state and verify ownership
   const existing = await prisma.note.findUnique({
     where: { id: noteId },
-    select: { createdById: true, isFavorite: true },
+    select: { createdById: true, isFavorite: true, deletedAt: true },
   });
 
   if (!existing) {
+    throw new NotFoundError(`Note with ID '${noteId}' not found`);
+  }
+
+  // Treat deleted notes as not found (Story 3.5)
+  if (existing.deletedAt) {
     throw new NotFoundError(`Note with ID '${noteId}' not found`);
   }
 
@@ -288,8 +314,12 @@ export async function toggleNoteFavorite(
 }
 
 /**
- * Delete a note with ownership verification
+ * Soft delete a note with ownership verification
  *
+ * Sets deletedAt timestamp instead of permanently deleting.
+ * Note can be restored within 30 seconds via restoreNote().
+ *
+ * @see Story 3.5: Suppression d'une Note
  * @throws {NotFoundError} If note doesn't exist
  * @throws {ForbiddenError} If user doesn't own the note
  */
@@ -297,7 +327,7 @@ export async function deleteNote(noteId: string, userId: string): Promise<void> 
   // Verify ownership first
   const existing = await prisma.note.findUnique({
     where: { id: noteId },
-    select: { createdById: true },
+    select: { createdById: true, deletedAt: true },
   });
 
   if (!existing) {
@@ -308,7 +338,51 @@ export async function deleteNote(noteId: string, userId: string): Promise<void> 
     throw new ForbiddenError("You do not have permission to delete this note");
   }
 
-  await prisma.note.delete({ where: { id: noteId } });
+  // Already deleted - no-op
+  if (existing.deletedAt) {
+    return;
+  }
 
-  logger.info({ noteId, userId }, "Note deleted");
+  await prisma.note.update({
+    where: { id: noteId },
+    data: { deletedAt: new Date() },
+  });
+
+  logger.info({ noteId, userId }, "Note soft deleted");
+}
+
+/**
+ * Restore a soft-deleted note
+ *
+ * Clears the deletedAt timestamp to restore the note.
+ *
+ * @see Story 3.5: Suppression d'une Note
+ * @throws {NotFoundError} If note doesn't exist
+ * @throws {ForbiddenError} If user doesn't own the note
+ */
+export async function restoreNote(noteId: string, userId: string): Promise<void> {
+  const existing = await prisma.note.findUnique({
+    where: { id: noteId },
+    select: { createdById: true, deletedAt: true },
+  });
+
+  if (!existing) {
+    throw new NotFoundError(`Note with ID '${noteId}' not found`);
+  }
+
+  if (existing.createdById !== userId) {
+    throw new ForbiddenError("You do not have permission to restore this note");
+  }
+
+  // Not deleted - no-op
+  if (!existing.deletedAt) {
+    return;
+  }
+
+  await prisma.note.update({
+    where: { id: noteId },
+    data: { deletedAt: null },
+  });
+
+  logger.info({ noteId, userId }, "Note restored");
 }

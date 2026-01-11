@@ -6,11 +6,13 @@
  *
  * @see NFR11: Authentication required for all access
  * @see Story 2.5: Page de Profil Utilisateur
+ * @see Story 3.3: Raccourci Ctrl+N pour nouvelle note
  */
 
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
+import { DashboardProviders } from '@/components/providers/DashboardProviders';
 
 export default async function DashboardLayout({
   children,
@@ -27,7 +29,9 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main>{children}</main>
+      <DashboardProviders>
+        <main>{children}</main>
+      </DashboardProviders>
     </div>
   );
 }
