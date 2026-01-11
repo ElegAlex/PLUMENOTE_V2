@@ -94,8 +94,16 @@ export { useNote, noteKeys, type UseNoteOptions } from "./hooks/useNote";
 export { useNotes, type UseNotesOptions } from "./hooks/useNotes";
 export { useTags, tagKeys, type UseTagsOptions } from "./hooks/useTags";
 export { useAutoSave, type UseAutoSaveOptions } from "./hooks/useAutoSave";
+export { useFolders, folderKeys, type UseFoldersOptions } from "./hooks/useFolders";
+export { useFolder, type UseFolderOptions } from "./hooks/useFolder";
+export { useMoveNote, type MoveNoteInput, type MoveNoteResult, type UseMoveNoteOptions } from "./hooks/useMoveNote";
 
 // Components
 export { NoteCard, type NoteCardProps } from "./components/NoteCard";
 export { NotesList, type NotesListProps } from "./components/NotesList";
 export { NoteHeader, type NoteHeaderProps, type SaveStatus } from "./components/NoteHeader";
+export { FolderTree, type FolderTreeProps } from "./components/FolderTree";
+export { FolderTreeItem, type FolderTreeItemProps } from "./components/FolderTreeItem";
+export { CreateFolderDialog, type CreateFolderDialogProps } from "./components/CreateFolderDialog";
+export { DeleteFolderDialog, type DeleteFolderDialogProps } from "./components/DeleteFolderDialog";
+export { MoveToFolderDialog, type MoveToFolderDialogProps } from "./components/MoveToFolderDialog";

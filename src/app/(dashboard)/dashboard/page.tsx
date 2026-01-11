@@ -268,6 +268,8 @@ export default function DashboardPage() {
         onClearSearch={handleClearSearch}
         deletingId={deletingId}
         isTogglingFavorite={isTogglingFavorite}
+        enableMoveToFolder={true}
+        enableDragAndDrop={true}
       />
 
       {/* Delete confirmation dialog */}

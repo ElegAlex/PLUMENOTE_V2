@@ -239,4 +239,103 @@ describe("NoteCard", () => {
       expect(removeButtons).toHaveLength(0);
     });
   });
+
+  describe("move to folder action (Story 5.3)", () => {
+    it("should render 'Déplacer vers...' menu item when onMoveToFolder is provided", async () => {
+      const onMoveToFolder = vi.fn();
+      const user = userEvent.setup();
+
+      render(<NoteCard note={mockNote} onMoveToFolder={onMoveToFolder} />);
+
+      // Open dropdown menu
+      const menuTrigger = screen.getByRole("button", {
+        name: /actions pour la note/i,
+      });
+      await user.click(menuTrigger);
+
+      expect(screen.getByText("Déplacer vers...")).toBeInTheDocument();
+    });
+
+    it("should call onMoveToFolder when 'Déplacer vers...' is clicked", async () => {
+      const onMoveToFolder = vi.fn();
+      const user = userEvent.setup();
+
+      render(<NoteCard note={mockNote} onMoveToFolder={onMoveToFolder} />);
+
+      // Open dropdown menu
+      const menuTrigger = screen.getByRole("button", {
+        name: /actions pour la note/i,
+      });
+      await user.click(menuTrigger);
+
+      // Click "Déplacer vers..."
+      const moveButton = screen.getByText("Déplacer vers...");
+      await user.click(moveButton);
+
+      expect(onMoveToFolder).toHaveBeenCalledWith("note-123");
+    });
+
+    it("should not render 'Déplacer vers...' when onMoveToFolder is not provided", async () => {
+      const user = userEvent.setup();
+
+      render(<NoteCard note={mockNote} />);
+
+      // Open dropdown menu
+      const menuTrigger = screen.getByRole("button", {
+        name: /actions pour la note/i,
+      });
+      await user.click(menuTrigger);
+
+      expect(screen.queryByText("Déplacer vers...")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("drag and drop (Story 5.3)", () => {
+    it("should be draggable when draggable prop is true", () => {
+      const { container } = render(<NoteCard note={mockNote} draggable={true} />);
+
+      const card = container.querySelector("[draggable='true']");
+      expect(card).toBeInTheDocument();
+    });
+
+    it("should not be draggable by default", () => {
+      const { container } = render(<NoteCard note={mockNote} />);
+
+      const card = container.querySelector("[draggable='true']");
+      expect(card).not.toBeInTheDocument();
+    });
+
+    it("should have cursor-grab class when draggable", () => {
+      const { container } = render(<NoteCard note={mockNote} draggable={true} />);
+
+      const card = container.querySelector("[class*='cursor-grab']");
+      expect(card).toBeInTheDocument();
+    });
+
+    it("should set note ID in dataTransfer on drag start", () => {
+      const { container } = render(<NoteCard note={mockNote} draggable={true} />);
+
+      const card = container.querySelector("[draggable='true']");
+      expect(card).toBeInTheDocument();
+
+      // Create mock dataTransfer
+      const dataTransfer = {
+        setData: vi.fn(),
+        effectAllowed: "",
+      };
+
+      // Simulate drag start
+      const dragStartEvent = new Event("dragstart", { bubbles: true });
+      Object.defineProperty(dragStartEvent, "dataTransfer", {
+        value: dataTransfer,
+        writable: true,
+      });
+
+      card?.dispatchEvent(dragStartEvent);
+
+      expect(dataTransfer.setData).toHaveBeenCalledWith("text/plain", "note-123");
+      expect(dataTransfer.setData).toHaveBeenCalledWith("application/x-note-id", "note-123");
+      expect(dataTransfer.effectAllowed).toBe("move");
+    });
+  });
 });

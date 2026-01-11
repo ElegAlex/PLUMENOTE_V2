@@ -4,16 +4,24 @@
  * NotesList Component
  *
  * Displays a grid of notes with loading and empty states.
+ * Supports moving notes to folders via dialog and toast notifications.
  *
  * @see Story 3.3: Liste des Notes
+ * @see Story 5.3: Déplacement de Notes dans les Dossiers
  */
 
+import { useState, useCallback } from "react";
 import { FileText, Plus, AlertCircle, Search } from "lucide-react";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { NoteCard } from "./NoteCard";
+import { MoveToFolderDialog } from "./MoveToFolderDialog";
+import { useMoveNote } from "../hooks/useMoveNote";
+import { useFolders } from "../hooks/useFolders";
+import { findFolderNameById } from "../utils/folderUtils";
 import { cn } from "@/lib/utils";
-import type { Note } from "../types";
+import type { Note, FolderWithChildren } from "../types";
 
 export interface NotesListProps {
   /** List of notes to display */
@@ -38,6 +46,10 @@ export interface NotesListProps {
   deletingId?: string | null;
   /** Whether favorite toggle is in progress */
   isTogglingFavorite?: boolean;
+  /** Whether to enable moving notes to folders */
+  enableMoveToFolder?: boolean;
+  /** Whether to enable drag-and-drop for notes */
+  enableDragAndDrop?: boolean;
   /** Additional CSS classes */
   className?: string;
 }
@@ -150,8 +162,59 @@ export function NotesList({
   onClearSearch,
   deletingId,
   isTogglingFavorite,
+  enableMoveToFolder = false,
+  enableDragAndDrop = false,
   className,
 }: NotesListProps) {
+  // State for move dialog
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [moveNoteId, setMoveNoteId] = useState<string | null>(null);
+  const [moveNoteCurrentFolderId, setMoveNoteCurrentFolderId] = useState<string | null>(null);
+
+  // Hooks for moving notes
+  const { moveNoteAsync } = useMoveNote();
+  const { folders } = useFolders({ tree: true });
+
+  // Open move dialog for a note
+  const handleMoveToFolder = useCallback((noteId: string) => {
+    const note = notes.find(n => n.id === noteId);
+    setMoveNoteId(noteId);
+    setMoveNoteCurrentFolderId(note?.folderId ?? null);
+    setMoveDialogOpen(true);
+  }, [notes]);
+
+  // Handle folder selection in move dialog
+  const handleMoveSelect = useCallback(async (noteId: string, folderId: string | null) => {
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+
+    try {
+      const result = await moveNoteAsync({ noteId, folderId });
+
+      // Find folder name for toast message
+      const folderName = folderId
+        ? findFolderNameById(folders as FolderWithChildren[], folderId)
+        : "Racine";
+
+      toast.success(`Note déplacée vers "${folderName}"`, {
+        action: {
+          label: "Annuler",
+          onClick: async () => {
+            try {
+              await moveNoteAsync({ noteId, folderId: result.previousFolderId });
+              toast.success("Déplacement annulé");
+            } catch {
+              toast.error("Erreur lors de l'annulation");
+            }
+          },
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erreur lors du déplacement";
+      toast.error(message);
+    }
+  }, [notes, folders, moveNoteAsync]);
+
   if (isLoading) {
     return <NotesListSkeleton />;
   }
@@ -174,17 +237,32 @@ export function NotesList({
   }
 
   return (
-    <div className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", className)}>
-      {notes.map((note) => (
-        <NoteCard
-          key={note.id}
-          note={note}
-          onDelete={onDelete}
-          onToggleFavorite={onToggleFavorite}
-          isDeleting={deletingId === note.id}
-          isTogglingFavorite={isTogglingFavorite}
+    <>
+      <div className={cn("grid gap-4 sm:grid-cols-2 lg:grid-cols-3", className)}>
+        {notes.map((note) => (
+          <NoteCard
+            key={note.id}
+            note={note}
+            onDelete={onDelete}
+            onToggleFavorite={onToggleFavorite}
+            onMoveToFolder={enableMoveToFolder ? handleMoveToFolder : undefined}
+            isDeleting={deletingId === note.id}
+            isTogglingFavorite={isTogglingFavorite}
+            draggable={enableDragAndDrop}
+          />
+        ))}
+      </div>
+
+      {/* Move to folder dialog */}
+      {enableMoveToFolder && moveNoteId && (
+        <MoveToFolderDialog
+          open={moveDialogOpen}
+          onOpenChange={setMoveDialogOpen}
+          noteId={moveNoteId}
+          currentFolderId={moveNoteCurrentFolderId}
+          onSelect={handleMoveSelect}
         />
-      ))}
-    </div>
+      )}
+    </>
   );
 }

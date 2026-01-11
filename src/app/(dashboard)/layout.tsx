@@ -7,11 +7,13 @@
  * @see NFR11: Authentication required for all access
  * @see Story 2.5: Page de Profil Utilisateur
  * @see Story 3.3: Raccourci Ctrl+N pour nouvelle note
+ * @see Story 5.2: Création et Gestion des Dossiers
  */
 
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { DashboardProviders } from '@/components/providers/DashboardProviders';
 
 export default async function DashboardLayout({
@@ -30,7 +32,10 @@ export default async function DashboardLayout({
     <div className="min-h-screen bg-background">
       <Header />
       <DashboardProviders>
-        <main>{children}</main>
+        <div className="flex h-[calc(100vh-3.5rem)]">
+          <Sidebar />
+          <main className="flex-1 overflow-y-auto">{children}</main>
+        </div>
       </DashboardProviders>
     </div>
   );

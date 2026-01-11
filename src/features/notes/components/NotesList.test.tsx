@@ -4,13 +4,16 @@
  * Tests grid display, loading state, and empty state.
  *
  * @see Story 3.3: Liste des Notes
+ * @see Story 5.3: Déplacement de Notes dans les Dossiers
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NotesList } from "./NotesList";
 import type { Note } from "../types";
+import type { ReactNode } from "react";
 
 // Mock next/link
 vi.mock("next/link", () => ({
@@ -28,6 +31,27 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }));
+
+// Mock fetch
+const mockFetch = vi.fn();
+global.fetch = mockFetch;
+
+// Create wrapper with QueryClient
+function createWrapper() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+  };
+}
 
 const mockNotes: Note[] = [
   {
@@ -57,9 +81,18 @@ const mockNotes: Note[] = [
 ];
 
 describe("NotesList", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    // Default mock for useFolders - returns empty folders
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [] }),
+    });
+  });
+
   describe("rendering notes", () => {
     it("should render all notes", () => {
-      render(<NotesList notes={mockNotes} />);
+      render(<NotesList notes={mockNotes} />, { wrapper: createWrapper() });
 
       expect(screen.getByText("First Note")).toBeInTheDocument();
       expect(screen.getByText("Second Note")).toBeInTheDocument();
@@ -67,7 +100,7 @@ describe("NotesList", () => {
     });
 
     it("should render notes in a grid", () => {
-      const { container } = render(<NotesList notes={mockNotes} />);
+      const { container } = render(<NotesList notes={mockNotes} />, { wrapper: createWrapper() });
 
       const grid = container.querySelector(".grid");
       expect(grid).toBeInTheDocument();
@@ -75,7 +108,8 @@ describe("NotesList", () => {
 
     it("should apply custom className", () => {
       const { container } = render(
-        <NotesList notes={mockNotes} className="custom-grid" />
+        <NotesList notes={mockNotes} className="custom-grid" />,
+        { wrapper: createWrapper() }
       );
 
       const grid = container.querySelector(".custom-grid");
@@ -85,7 +119,7 @@ describe("NotesList", () => {
 
   describe("loading state", () => {
     it("should render skeletons when loading", () => {
-      const { container } = render(<NotesList notes={[]} isLoading={true} />);
+      const { container } = render(<NotesList notes={[]} isLoading={true} />, { wrapper: createWrapper() });
 
       // Should render skeleton elements
       const skeletons = container.querySelectorAll("[class*='animate-pulse']");
@@ -93,7 +127,7 @@ describe("NotesList", () => {
     });
 
     it("should not render notes when loading", () => {
-      render(<NotesList notes={mockNotes} isLoading={true} />);
+      render(<NotesList notes={mockNotes} isLoading={true} />, { wrapper: createWrapper() });
 
       expect(screen.queryByText("First Note")).not.toBeInTheDocument();
     });
@@ -101,7 +135,7 @@ describe("NotesList", () => {
 
   describe("empty state", () => {
     it("should render empty state when no notes", () => {
-      render(<NotesList notes={[]} />);
+      render(<NotesList notes={[]} />, { wrapper: createWrapper() });
 
       expect(screen.getByText("Aucune note")).toBeInTheDocument();
       expect(
@@ -113,7 +147,7 @@ describe("NotesList", () => {
       const onCreate = vi.fn();
       const user = userEvent.setup();
 
-      render(<NotesList notes={[]} onCreate={onCreate} />);
+      render(<NotesList notes={[]} onCreate={onCreate} />, { wrapper: createWrapper() });
 
       const createButton = screen.getByRole("button", {
         name: /creer une note/i,
@@ -125,7 +159,7 @@ describe("NotesList", () => {
     });
 
     it("should not render create button if onCreate not provided", () => {
-      render(<NotesList notes={[]} />);
+      render(<NotesList notes={[]} />, { wrapper: createWrapper() });
 
       expect(
         screen.queryByRole("button", { name: /creer une note/i })
@@ -136,7 +170,7 @@ describe("NotesList", () => {
   describe("error state", () => {
     it("should render error state when error is provided", () => {
       const error = new Error("Failed to load notes");
-      render(<NotesList notes={[]} error={error} />);
+      render(<NotesList notes={[]} error={error} />, { wrapper: createWrapper() });
 
       expect(screen.getByText("Erreur de chargement")).toBeInTheDocument();
       expect(screen.getByText("Failed to load notes")).toBeInTheDocument();
@@ -147,7 +181,7 @@ describe("NotesList", () => {
       const onRetry = vi.fn();
       const user = userEvent.setup();
 
-      render(<NotesList notes={[]} error={error} onRetry={onRetry} />);
+      render(<NotesList notes={[]} error={error} onRetry={onRetry} />, { wrapper: createWrapper() });
 
       const retryButton = screen.getByRole("button", { name: /reessayer/i });
       expect(retryButton).toBeInTheDocument();
@@ -158,7 +192,7 @@ describe("NotesList", () => {
 
     it("should not render retry button if onRetry not provided", () => {
       const error = new Error("Network error");
-      render(<NotesList notes={[]} error={error} />);
+      render(<NotesList notes={[]} error={error} />, { wrapper: createWrapper() });
 
       expect(
         screen.queryByRole("button", { name: /reessayer/i })
@@ -168,7 +202,8 @@ describe("NotesList", () => {
     it("should prioritize loading over error", () => {
       const error = new Error("Error");
       const { container } = render(
-        <NotesList notes={[]} isLoading={true} error={error} />
+        <NotesList notes={[]} isLoading={true} error={error} />,
+        { wrapper: createWrapper() }
       );
 
       // Should show loading, not error
@@ -180,7 +215,7 @@ describe("NotesList", () => {
 
   describe("search no results state", () => {
     it("should render no results state when searchQuery is provided and notes is empty", () => {
-      render(<NotesList notes={[]} searchQuery="hello" />);
+      render(<NotesList notes={[]} searchQuery="hello" />, { wrapper: createWrapper() });
 
       expect(screen.getByText("Aucun resultat")).toBeInTheDocument();
       expect(
@@ -193,7 +228,8 @@ describe("NotesList", () => {
       const user = userEvent.setup();
 
       render(
-        <NotesList notes={[]} searchQuery="test" onClearSearch={onClearSearch} />
+        <NotesList notes={[]} searchQuery="test" onClearSearch={onClearSearch} />,
+        { wrapper: createWrapper() }
       );
 
       const clearButton = screen.getByRole("button", {
@@ -206,7 +242,7 @@ describe("NotesList", () => {
     });
 
     it("should not render clear search button if onClearSearch not provided", () => {
-      render(<NotesList notes={[]} searchQuery="test" />);
+      render(<NotesList notes={[]} searchQuery="test" />, { wrapper: createWrapper() });
 
       expect(
         screen.queryByRole("button", { name: /effacer la recherche/i })
@@ -214,7 +250,7 @@ describe("NotesList", () => {
     });
 
     it("should show empty state instead of no results when no searchQuery", () => {
-      render(<NotesList notes={[]} />);
+      render(<NotesList notes={[]} />, { wrapper: createWrapper() });
 
       expect(screen.getByText("Aucune note")).toBeInTheDocument();
       expect(screen.queryByText("Aucun resultat")).not.toBeInTheDocument();
@@ -226,7 +262,7 @@ describe("NotesList", () => {
       const onDelete = vi.fn();
       const user = userEvent.setup();
 
-      render(<NotesList notes={mockNotes} onDelete={onDelete} />);
+      render(<NotesList notes={mockNotes} onDelete={onDelete} />, { wrapper: createWrapper() });
 
       // Open first note's dropdown
       const menuTriggers = screen.getAllByRole("button", {
@@ -243,7 +279,8 @@ describe("NotesList", () => {
 
     it("should mark correct note as deleting", () => {
       const { container } = render(
-        <NotesList notes={mockNotes} deletingId="note-2" />
+        <NotesList notes={mockNotes} deletingId="note-2" />,
+        { wrapper: createWrapper() }
       );
 
       // The second card should have opacity-50
