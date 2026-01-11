@@ -91,6 +91,10 @@ export const authConfig = {
         session.user.role = token.role;
         session.user.id = token.id;
       }
+      // Pass wsToken from JWT callback to session for WebSocket auth
+      if (token?.wsToken) {
+        (session as { accessToken?: string }).accessToken = token.wsToken as string;
+      }
       return session;
     },
   },

@@ -17,10 +17,15 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@auth/prisma-adapter';
+import * as jose from 'jose';
 import { prisma } from '@/lib/prisma';
 import { authConfig } from './auth.config';
 import { verifyPassword } from './password';
 import { logger } from './logger';
+
+// Encode AUTH_SECRET for jose
+const AUTH_SECRET = process.env.AUTH_SECRET;
+const wsTokenSecret = AUTH_SECRET ? new TextEncoder().encode(AUTH_SECRET) : null;
 
 /**
  * NextAuth.js v5 instance with Credentials provider
@@ -45,6 +50,46 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: 'jwt',
     maxAge: 24 * 60 * 60, // 24 hours in seconds
+  },
+
+  /**
+   * Extended callbacks - adds wsToken for WebSocket authentication
+   */
+  callbacks: {
+    ...authConfig.callbacks,
+
+    /**
+     * JWT callback - extends base callback to add WebSocket auth token
+     * Generates a signed JWT for Hocuspocus authentication
+     */
+    async jwt({ token, user }) {
+      // First run the base callback
+      if (user) {
+        token.role = user.role;
+        token.id = user.id as string;
+      }
+
+      // Generate WebSocket auth token (signed JWT for Hocuspocus)
+      if (wsTokenSecret && token.sub) {
+        try {
+          const wsToken = await new jose.SignJWT({
+            sub: token.sub,
+            name: token.name,
+            email: token.email,
+          })
+            .setProtectedHeader({ alg: 'HS256' })
+            .setIssuedAt()
+            .setExpirationTime('24h')
+            .sign(wsTokenSecret);
+
+          token.wsToken = wsToken;
+        } catch (error) {
+          logger.error({ error }, 'Failed to generate WebSocket token');
+        }
+      }
+
+      return token;
+    },
   },
 
   /**

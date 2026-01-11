@@ -10,7 +10,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { forwardRef, useImperativeHandle } from "react";
+import { forwardRef, useImperativeHandle, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 export interface EditorProps {
@@ -26,6 +26,8 @@ export interface EditorProps {
   className?: string;
   /** Auto-focus on mount */
   autoFocus?: boolean;
+  /** Callback when editor is ready with editor instance */
+  onEditorReady?: (editor: ReturnType<typeof useEditor>) => void;
 }
 
 export interface EditorRef {
@@ -56,10 +58,11 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   {
     content = "",
     onUpdate,
-    placeholder = "Commencez a ecrire...",
+    placeholder = "Commencez à écrire...",
     editable = true,
     className,
     autoFocus = false,
+    onEditorReady,
   },
   ref
 ) {
@@ -140,6 +143,13 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
     },
     getEditor: () => editor,
   }));
+
+  // Notify when editor is ready
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
 
   if (!editor) {
     return (

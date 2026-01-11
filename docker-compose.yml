@@ -52,7 +52,7 @@ services:
     networks:
       - plumenote-network
 
-  # ----- Hocuspocus WebSocket Server (Placeholder) -----
+  # ----- Hocuspocus WebSocket Server -----
   ws:
     build:
       context: ./server/hocuspocus
@@ -64,7 +64,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 1234
+      LOG_LEVEL: info
       DATABASE_URL: postgresql://${POSTGRES_USER:-plumenote}:${POSTGRES_PASSWORD:-plumenote_dev}@db:5432/${POSTGRES_DB:-plumenote}?schema=public
+      AUTH_SECRET: ${AUTH_SECRET:-dev-secret-key-for-local-development-only}
     depends_on:
       db:
         condition: service_healthy
