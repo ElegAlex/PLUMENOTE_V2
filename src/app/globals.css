@@ -139,3 +139,68 @@
   pointer-events: none;
   height: 0;
 }
+
+/* ===========================================
+   Collaborative Cursors (Story 4-4)
+   =========================================== */
+
+/* Cursor caret - vertical line showing cursor position */
+.collaboration-cursor__caret {
+  position: relative;
+  margin-left: -1px;
+  margin-right: -1px;
+  border-left: 1px solid;
+  border-right: 1px solid;
+  word-break: normal;
+  pointer-events: none;
+}
+
+/* User name label above cursor */
+.collaboration-cursor__label {
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  border-radius: 3px 3px 3px 0;
+  padding: 0.1rem 0.3rem;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  color: white;
+  user-select: none;
+  z-index: 10;
+  /* Text outline for readability on any background color */
+  text-shadow:
+    -1px -1px 0 rgba(0, 0, 0, 0.5),
+    1px -1px 0 rgba(0, 0, 0, 0.5),
+    -1px 1px 0 rgba(0, 0, 0, 0.5),
+    1px 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* Dark mode adjustments for label visibility */
+.dark .collaboration-cursor__label {
+  text-shadow:
+    -1px -1px 0 rgba(0, 0, 0, 0.7),
+    1px -1px 0 rgba(0, 0, 0, 0.7),
+    -1px 1px 0 rgba(0, 0, 0, 0.7),
+    1px 1px 0 rgba(0, 0, 0, 0.7);
+}
+
+/* Selection highlight from other users */
+.ProseMirror .selection {
+  background: inherit;
+}
+
+/* Remote user text selection */
+.ProseMirror mark[data-color] {
+  background-color: var(--selection-color, rgba(79, 70, 229, 0.2));
+}
+
+/* Ensure cursor labels don't get cut off at container edges */
+.editor-wrapper {
+  overflow: visible;
+}
+
+.editor-wrapper .ProseMirror {
+  position: relative;
+}

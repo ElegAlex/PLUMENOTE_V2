@@ -3,26 +3,36 @@
 /**
  * Note Edit Page
  *
- * Displays the note editor with toolbar for editing a specific note.
- * Auto-saves changes with debounce.
+ * Displays the collaborative note editor with toolbar for editing a specific note.
+ * Uses Y.js/Hocuspocus for real-time collaboration.
+ * Auto-saves title changes with debounce.
  *
  * @see Story 3.2: Editeur Tiptap Markdown de Base
  * @see Story 3.3: Creation d'une Nouvelle Note
  * @see Story 3.4: Sauvegarde Automatique des Notes
  * @see Story 3.5: Suppression d'une Note
+ * @see Story 4.3: Edition Simultanee
+ * @see Story 4.5: Indicateur de Presence
  * @see FR8: Un utilisateur peut editer une note en Markdown avec previsualisation live
  */
 
 import { use, useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
+import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
-import { EditorToolbar } from "@/features/editor";
+import {
+  Editor as FallbackEditor,
+  EditorToolbar,
+  CollaborativeEditor,
+  SyncStatusIndicator,
+  PresenceIndicator,
+  usePresence,
+  type ConnectionStatus,
+} from "@/features/editor";
+import type { HocuspocusProvider } from "@hocuspocus/provider";
 import { useNote } from "@/features/notes/hooks/useNote";
 import { useNotes } from "@/features/notes/hooks/useNotes";
 import { useAutoSave } from "@/features/notes/hooks/useAutoSave";
@@ -57,11 +67,25 @@ export default function NotePage({ params }: NotePageProps) {
 
   // Track user edits separately from the loaded note
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
-  const [isEditorReady, setIsEditorReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
-  const contentInitializedRef = useRef(false);
   const saveStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const flushRef = useRef<(() => Promise<boolean>) | null>(null);
+
+  // Collaborative editor state
+  const [editor, setEditor] = useState<TiptapEditor | null>(null);
+  const [syncStatus, setSyncStatus] = useState<ConnectionStatus>("connecting");
+  const [collaborationError, setCollaborationError] = useState<string | null>(null);
+  const [useFallbackEditor, setUseFallbackEditor] = useState(false);
+  const [fallbackEditor, setFallbackEditor] = useState<TiptapEditor | null>(null);
+  const [provider, setProvider] = useState<HocuspocusProvider | null>(null);
+
+  // Presence tracking (Story 4-5)
+  const { users: presenceUsers } = usePresence({ provider });
+
+  // Handler for fallback editor ready
+  const handleFallbackEditorReady = useCallback((editorInstance: TiptapEditor | null) => {
+    setFallbackEditor(editorInstance);
+  }, []);
 
   // Cleanup timeout on unmount to prevent memory leak
   useEffect(() => {
@@ -84,7 +108,7 @@ export default function NotePage({ params }: NotePageProps) {
     [editedTitle, note?.title]
   );
 
-  // Auto-save handler with status tracking
+  // Auto-save handler for title only (content is synced via Y.js/Hocuspocus)
   const handleSave = useCallback(
     async (data: UpdateNoteInput) => {
       setSaveStatus("saving");
@@ -100,8 +124,8 @@ export default function NotePage({ params }: NotePageProps) {
       } catch (err) {
         console.error("Failed to save note:", err);
         setSaveStatus("error");
-        toast.error("Echec de la sauvegarde", {
-          description: "Vos modifications n'ont pas pu etre enregistrees.",
+        toast.error("Echec de la sauvegarde du titre", {
+          description: "Le titre n'a pas pu etre enregistre.",
           action: {
             label: "Reessayer",
             onClick: () => flushRef.current?.(),
@@ -125,14 +149,14 @@ export default function NotePage({ params }: NotePageProps) {
     return saveStatus;
   }, [isOnline, saveStatus]);
 
-  // Keyboard shortcut: Ctrl+S to force save
+  // Keyboard shortcut: Ctrl+S to force save title
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         const wasSaved = await flush();
         if (wasSaved) {
-          toast.success("Note sauvegardee");
+          toast.success("Titre sauvegarde");
         }
       }
     };
@@ -140,48 +164,36 @@ export default function NotePage({ params }: NotePageProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [flush]);
 
-  // Initialize editor with Placeholder extension
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3, 4, 5, 6] },
-      }),
-      Placeholder.configure({
-        placeholder: "Commencez a ecrire...",
-        emptyEditorClass: "is-editor-empty",
-      }),
-    ],
-    content: "",
-    editorProps: {
-      attributes: {
-        class:
-          "prose prose-slate dark:prose-invert max-w-none min-h-[calc(100vh-300px)] p-4 focus:outline-none prose-headings:font-semibold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-h4:text-lg prose-h5:text-base prose-h6:text-sm prose-p:my-2 prose-p:leading-relaxed prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-code:rounded prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono prose-code:text-sm prose-pre:rounded-lg prose-pre:bg-muted prose-pre:p-4",
-      },
-    },
-    onCreate: () => {
-      setIsEditorReady(true);
-    },
-    onUpdate: ({ editor: ed }) => {
-      autoSave({ content: ed.getHTML() });
-    },
-  });
+  // Handle editor ready callback from CollaborativeEditor
+  const handleEditorReady = useCallback((ed: TiptapEditor | null) => {
+    setEditor(ed);
+  }, []);
 
-  // Update editor content when note loads and editor is ready (only once)
-  useEffect(() => {
-    if (
-      editor &&
-      isEditorReady &&
-      note?.content !== undefined &&
-      !contentInitializedRef.current
-    ) {
-      // Always mark as initialized, even for empty content (L4 fix)
-      contentInitializedRef.current = true;
-      const newContent = note.content ?? "";
-      if (newContent) {
-        editor.commands.setContent(newContent);
-      }
-    }
-  }, [editor, isEditorReady, note?.content]);
+  // Handle provider ready for presence tracking (Story 4-5)
+  const handleProviderReady = useCallback((prov: HocuspocusProvider) => {
+    setProvider(prov);
+  }, []);
+
+  // Handle collaboration error with fallback option
+  const handleCollaborationError = useCallback((err: string) => {
+    setCollaborationError(err);
+    toast.error("Erreur de collaboration", {
+      description: err,
+      action: {
+        label: "Mode hors-ligne",
+        onClick: () => setUseFallbackEditor(true),
+      },
+      duration: 10000,
+    });
+  }, []);
+
+  // Handle fallback editor content changes (autosave via API)
+  const handleFallbackEditorUpdate = useCallback(
+    (content: string) => {
+      autoSave({ content });
+    },
+    [autoSave]
+  );
 
   // Handle title change with auto-save
   const handleTitleChange = useCallback(
@@ -292,7 +304,7 @@ export default function NotePage({ params }: NotePageProps) {
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      {/* Note Header with Title, Save Status, and Delete Button */}
+      {/* Note Header with Title, Save Status, Presence, and Delete Button */}
       <div className="mb-4 flex items-start gap-4">
         <div className="flex-1">
           <NoteHeader
@@ -302,6 +314,14 @@ export default function NotePage({ params }: NotePageProps) {
             isNewNote={isNewNote}
           />
         </div>
+        {/* Presence Indicator (Story 4-5) */}
+        {!useFallbackEditor && presenceUsers.length > 0 && (
+          <PresenceIndicator
+            users={presenceUsers}
+            maxVisible={5}
+            className="mt-2"
+          />
+        )}
         {/* Delete button (Story 3.5) */}
         <Button
           variant="ghost"
@@ -322,17 +342,47 @@ export default function NotePage({ params }: NotePageProps) {
         className="mb-4"
       />
 
-      {/* Editor Toolbar */}
-      <EditorToolbar editor={editor} className="mb-4" />
-
-      {/* Editor Content */}
-      <div className="rounded-lg border bg-card">
-        {editor ? (
-          <EditorContent editor={editor} />
+      {/* Sync Status Indicator (Story 4.3) */}
+      <div className="mb-4 flex items-center justify-between">
+        {useFallbackEditor ? (
+          <div className="flex items-center gap-2 text-sm text-yellow-600">
+            <span>Mode hors-ligne</span>
+            <button
+              onClick={() => setUseFallbackEditor(false)}
+              className="text-xs underline hover:no-underline"
+            >
+              Réessayer collaboration
+            </button>
+          </div>
         ) : (
-          <Skeleton className="h-64 w-full" />
+          <SyncStatusIndicator status={syncStatus} error={collaborationError} />
         )}
       </div>
+
+      {/* Editor Toolbar */}
+      <EditorToolbar
+        editor={useFallbackEditor ? fallbackEditor : editor}
+        className="mb-4"
+      />
+
+      {/* Editor: Collaborative or Fallback (Story 4.3) */}
+      {useFallbackEditor ? (
+        <FallbackEditor
+          content={note.content ?? ""}
+          onUpdate={handleFallbackEditorUpdate}
+          onEditorReady={handleFallbackEditorReady}
+          className="rounded-md border bg-background"
+        />
+      ) : (
+        <CollaborativeEditor
+          noteId={id}
+          showSyncStatus={false}
+          onEditorReady={handleEditorReady}
+          onConnectionStatusChange={setSyncStatus}
+          onError={handleCollaborationError}
+          onProviderReady={handleProviderReady}
+        />
+      )}
 
       {/* Delete confirmation dialog (Story 3.5) */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
