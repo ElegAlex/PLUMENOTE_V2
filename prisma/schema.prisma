@@ -30,6 +30,7 @@ model User {
   sessions    Session[]
   invitations Invitation[] @relation("InvitationsSent")
   notes       Note[]       @relation("NotesCreated")
+  folders     Folder[]     @relation("FoldersCreated")
   tags        Tag[]
 }
 
@@ -118,6 +119,35 @@ model Invitation {
 }
 
 // ============================================
+// Folder Model (Story 5.1 - Hierarchical Structure)
+// ============================================
+
+model Folder {
+  id          String    @id @default(cuid())
+  name        String
+
+  // Self-referential hierarchy
+  parentId    String?
+  parent      Folder?   @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Folder[]  @relation("FolderHierarchy")
+
+  // Notes in this folder
+  notes       Note[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Ownership
+  createdById String
+  createdBy   User      @relation("FoldersCreated", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Unique folder name per user per parent level
+  @@unique([createdById, name, parentId])
+  @@index([createdById])
+  @@index([parentId])
+}
+
+// ============================================
 // Note Model (Epic 3 - Notes Management)
 // ============================================
 
@@ -126,6 +156,10 @@ model Note {
   title        String    @default("Sans titre")
   content      String?   @db.Text     // Markdown content for search and display
   ydoc         Bytes?                  // Y.Doc encoded for collaboration (Epic 4)
+
+  // Story 5.1: Folder organization
+  folderId     String?
+  folder       Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   // Story 3.5: Organization features
   isFavorite   Boolean   @default(false)  // Pin/favorite notes
@@ -153,6 +187,7 @@ model Note {
   @@index([isFavorite])
   @@index([sortOrder])
   @@index([deletedAt])
+  @@index([folderId])
 }
 
 // ============================================

@@ -20,7 +20,7 @@ import {
  * GET /api/notes
  *
  * List paginated notes for the authenticated user.
- * Query params: ?page=1&pageSize=20&search=query&favoriteOnly=true&tagIds=id1,id2&sortBy=updatedAt&sortDir=desc
+ * Query params: ?page=1&pageSize=20&search=query&folderId=cuid&favoriteOnly=true&tagIds=id1,id2&sortBy=updatedAt&sortDir=desc
  */
 export async function GET(request: NextRequest) {
   try {
@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       page: searchParams.get("page") ?? undefined,
       pageSize: searchParams.get("pageSize") ?? undefined,
       search: searchParams.get("search") ?? undefined,
+      folderId: searchParams.get("folderId") ?? undefined,
       favoriteOnly: searchParams.get("favoriteOnly") ?? undefined,
       tagIds: searchParams.get("tagIds") ?? undefined,
       sortBy: searchParams.get("sortBy") ?? undefined,
@@ -53,11 +54,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { page, pageSize, search, favoriteOnly, tagIds, sortBy, sortDir } = queryResult.data;
+    const { page, pageSize, search, folderId, favoriteOnly, tagIds, sortBy, sortDir } = queryResult.data;
     const { notes, total } = await getUserNotes(session.user.id, {
       page,
       pageSize,
       search,
+      folderId,
       favoriteOnly,
       tagIds,
       sortBy,
@@ -85,7 +87,7 @@ export async function GET(request: NextRequest) {
  * POST /api/notes
  *
  * Create a new note for the authenticated user.
- * Body: { title?: string, content?: string }
+ * Body: { title?: string, content?: string, folderId?: string | null, isFavorite?: boolean, tagIds?: string[] }
  */
 export async function POST(request: NextRequest) {
   try {

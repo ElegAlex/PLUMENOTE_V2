@@ -12,13 +12,6 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 
 /**
- * Global type for storing the Prisma client instance
- */
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-/**
  * Create PostgreSQL connection pool
  * This is required for the Prisma 7.x adapter pattern
  */
@@ -32,14 +25,24 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool);
 
 /**
+ * Global type for storing the Prisma client instance
+ */
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+/**
  * Prisma client instance with PostgreSQL adapter
  * Uses singleton pattern to prevent multiple instances in development
+ *
+ * Note: We cast to PrismaClient to ensure all generated model types are available.
+ * The adapter pattern in Prisma 7.x doesn't affect the model accessors at runtime.
  */
-export const prisma =
+export const prisma: PrismaClient =
   globalForPrisma.prisma ??
-  new PrismaClient({
+  (new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['query'] : [],
-  });
+  }) as PrismaClient);
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

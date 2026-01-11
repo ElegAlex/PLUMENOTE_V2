@@ -19,12 +19,25 @@ const tagSelect = {
 } as const;
 
 /**
+ * Selection fields for Folder in Note responses
+ */
+const folderSelect = {
+  id: true,
+  name: true,
+  parentId: true,
+  createdAt: true,
+  updatedAt: true,
+  createdById: true,
+} as const;
+
+/**
  * Selection fields for Note responses (excludes internal fields)
  */
 const noteSelect = {
   id: true,
   title: true,
   content: true,
+  folderId: true,
   isFavorite: true,
   sortOrder: true,
   createdAt: true,
@@ -33,10 +46,13 @@ const noteSelect = {
 } as const;
 
 /**
- * Selection fields for Note with tags
+ * Selection fields for Note with tags and folder
  */
 const noteWithTagsSelect = {
   ...noteSelect,
+  folder: {
+    select: folderSelect,
+  },
   tags: {
     select: {
       tag: {
@@ -53,17 +69,19 @@ export type NoteSortField = "updatedAt" | "createdAt" | "title" | "sortOrder";
 export type SortDirection = "asc" | "desc";
 
 /**
- * Transform Prisma note with tags to API format
+ * Transform Prisma note with tags and folder to API format
  */
 function transformNoteWithTags(
   note: {
     tags?: { tag: { id: string; name: string; color: string } }[];
+    folder?: { id: string; name: string; parentId: string | null; createdAt: Date; updatedAt: Date; createdById: string } | null;
   } & Record<string, unknown>
 ): Note {
-  const { tags, ...rest } = note;
+  const { tags, folder, ...rest } = note;
   return {
     ...rest,
     tags: tags?.map((t) => t.tag),
+    folder: folder ?? null,
   } as Note;
 }
 
@@ -78,6 +96,7 @@ export async function createNote(
     data: {
       title: data.title ?? "Sans titre",
       content: data.content,
+      folderId: data.folderId ?? null,
       isFavorite: data.isFavorite ?? false,
       createdById: userId,
       ...(data.tagIds?.length && {
@@ -89,7 +108,7 @@ export async function createNote(
     select: noteWithTagsSelect,
   });
 
-  logger.info({ noteId: note.id, userId }, "Note created");
+  logger.info({ noteId: note.id, userId, folderId: note.folderId }, "Note created");
   return transformNoteWithTags(note);
 }
 
@@ -136,6 +155,7 @@ export interface GetUserNotesOptions {
   pageSize: number;
   search?: string;
   // Filtering
+  folderId?: string | null; // Filter by folder (null = root level only)
   favoriteOnly?: boolean;
   tagIds?: string[];
   // Sorting
@@ -157,6 +177,7 @@ export async function getUserNotes(
     page,
     pageSize,
     search,
+    folderId,
     favoriteOnly,
     tagIds,
     sortBy = "updatedAt",
@@ -169,6 +190,7 @@ export async function getUserNotes(
   const where = {
     createdById: userId,
     deletedAt: null, // Exclude soft-deleted notes
+    ...(folderId !== undefined && { folderId }), // Filter by folder (null = root level)
     ...(search && {
       OR: [
         { title: { contains: search, mode: "insensitive" as const } },
@@ -259,13 +281,14 @@ export async function updateNote(
     data: {
       ...(data.title !== undefined && { title: data.title }),
       ...(data.content !== undefined && { content: data.content }),
+      ...(data.folderId !== undefined && { folderId: data.folderId }),
       ...(data.isFavorite !== undefined && { isFavorite: data.isFavorite }),
       ...tagUpdate,
     },
     select: noteWithTagsSelect,
   });
 
-  logger.info({ noteId, userId }, "Note updated");
+  logger.info({ noteId, userId, folderId: note.folderId }, "Note updated");
   return transformNoteWithTags(note);
 }
 

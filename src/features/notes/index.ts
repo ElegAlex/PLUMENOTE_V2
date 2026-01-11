@@ -5,8 +5,13 @@
 export type {
   Note,
   Tag,
+  Folder,
+  FolderWithChildren,
+  FolderWithCount,
   CreateNoteInput,
   UpdateNoteInput,
+  CreateFolderInput,
+  UpdateFolderInput,
   CreateTagInput,
   UpdateTagInput,
   NotesListResponse,
@@ -39,6 +44,20 @@ export type {
   TagIdSchemaInput,
 } from "./schemas/tag.schema";
 
+// Schemas - Folders (Story 5.1)
+export {
+  createFolderSchema,
+  updateFolderSchema,
+  folderIdSchema,
+  foldersQuerySchema,
+} from "./schemas/folder.schema";
+export type {
+  CreateFolderSchemaInput,
+  UpdateFolderSchemaInput,
+  FolderIdSchemaInput,
+  FoldersQuerySchemaInput,
+} from "./schemas/folder.schema";
+
 // Service - Notes
 export {
   createNote,
@@ -58,6 +77,17 @@ export {
   updateTag,
   deleteTag,
 } from "./services/tags.service";
+
+// Service - Folders (Story 5.1)
+export {
+  createFolder,
+  getFolderById,
+  getUserFolders,
+  getUserFoldersTree,
+  updateFolder,
+  deleteFolder,
+  getFolderPath,
+} from "./services/folders.service";
 
 // Hooks
 export { useNote, noteKeys, type UseNoteOptions } from "./hooks/useNote";

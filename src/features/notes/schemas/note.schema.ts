@@ -24,6 +24,7 @@ export const createNoteSchema = z.object({
     .max(1_000_000, "Content must be 1MB or less")
     .optional()
     .transform(emptyToUndefined),
+  folderId: z.string().cuid("Invalid folder ID format").nullable().optional(),
   isFavorite: z.boolean().optional(),
   tagIds: z.array(z.string().cuid("Invalid tag ID format")).optional(),
 });
@@ -48,6 +49,7 @@ export const updateNoteSchema = z
       .max(1_000_000, "Content must be 1MB or less")
       .optional()
       .transform(emptyToUndefined),
+    folderId: z.string().cuid("Invalid folder ID format").nullable().optional(),
     isFavorite: z.boolean().optional(),
     tagIds: z.array(z.string().cuid("Invalid tag ID format")).optional(),
   })
@@ -55,6 +57,7 @@ export const updateNoteSchema = z
     (data) =>
       data.title !== undefined ||
       data.content !== undefined ||
+      data.folderId !== undefined ||
       data.isFavorite !== undefined ||
       data.tagIds !== undefined,
     {
@@ -97,6 +100,11 @@ export const notesQuerySchema = z.object({
     .max(255, "Search query must be 255 characters or less")
     .optional()
     .transform(emptyToUndefined),
+  folderId: z
+    .string()
+    .cuid("Invalid folder ID format")
+    .nullable()
+    .optional(),
   favoriteOnly: z
     .string()
     .transform((val) => val === "true")
