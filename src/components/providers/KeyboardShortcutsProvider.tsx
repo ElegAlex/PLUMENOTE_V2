@@ -7,6 +7,7 @@
  * Must be mounted within a QueryClientProvider for React Query support.
  *
  * @see Story 3.3: Raccourci Ctrl+N pour nouvelle note
+ * @see Story 6.2: Raccourci Ctrl+K pour Command Palette
  */
 
 import { useRef, useCallback } from "react";
@@ -14,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { useNotes } from "@/features/notes/hooks/useNotes";
+import { useCommandPaletteStore } from "@/stores/commandPaletteStore";
 
 interface KeyboardShortcutsProviderProps {
   children: React.ReactNode;
@@ -24,6 +26,7 @@ export function KeyboardShortcutsProvider({
 }: KeyboardShortcutsProviderProps) {
   const router = useRouter();
   const { createNoteAsync, isCreating } = useNotes({ enabled: false });
+  const { open: openCommandPalette } = useCommandPaletteStore();
 
   // Use ref to prevent race condition with rapid key presses
   const isCreatingRef = useRef(false);
@@ -47,8 +50,14 @@ export function KeyboardShortcutsProvider({
     }
   }, [createNoteAsync, isCreating, router]);
 
+  // Handle Ctrl+K to open command palette
+  const handleSearch = useCallback(() => {
+    openCommandPalette();
+  }, [openCommandPalette]);
+
   useKeyboardShortcuts({
     onCreateNote: handleCreateNote,
+    onSearch: handleSearch,
     enabled: true,
   });
 

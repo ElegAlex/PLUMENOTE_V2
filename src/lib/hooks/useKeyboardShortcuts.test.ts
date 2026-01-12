@@ -66,6 +66,49 @@ describe("useKeyboardShortcuts", () => {
     expect(mockOnSearch).toHaveBeenCalledTimes(1);
   });
 
+  it("calls onSearch when Cmd+K is pressed (Mac)", () => {
+    renderHook(() =>
+      useKeyboardShortcuts({
+        onSearch: mockOnSearch,
+      })
+    );
+
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      metaKey: true,
+      bubbles: true,
+    });
+    window.dispatchEvent(event);
+
+    expect(mockOnSearch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onSearch when Ctrl+K is pressed in an input", () => {
+    renderHook(() =>
+      useKeyboardShortcuts({
+        onSearch: mockOnSearch,
+      })
+    );
+
+    // Create an input element and focus it
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = new KeyboardEvent("keydown", {
+      key: "k",
+      ctrlKey: true,
+      bubbles: true,
+    });
+    Object.defineProperty(event, "target", { value: input });
+    window.dispatchEvent(event);
+
+    expect(mockOnSearch).not.toHaveBeenCalled();
+
+    // Cleanup
+    document.body.removeChild(input);
+  });
+
   it("does not call handlers when shortcuts are disabled", () => {
     renderHook(() =>
       useKeyboardShortcuts({
