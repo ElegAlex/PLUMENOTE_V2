@@ -1,4 +1,5 @@
 // Search feature module
 // Barrel exports for search and discovery feature
 
-export {};
+// Components
+export { SearchBar, type SearchBarProps } from "./components/SearchBar";
