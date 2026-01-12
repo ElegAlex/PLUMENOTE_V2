@@ -118,3 +118,42 @@ export const notesQuerySchema = z.object({
 });
 
 export type NotesQuerySchemaInput = z.infer<typeof notesQuerySchema>;
+
+/**
+ * Schema for dedicated search endpoint query parameters
+ * - query: required search string, min 1 char, max 255 chars
+ * - page: positive integer, defaults to 1
+ * - pageSize: positive integer, max 100, defaults to 20
+ * - folderId: optional folder filter
+ * - favoriteOnly: optional boolean
+ * - tagIds: optional comma-separated tag IDs (each must be valid CUID)
+ *
+ * @see Story 6.1: Index Full-Text PostgreSQL (Task 3)
+ */
+export const searchQuerySchema = z.object({
+  query: z
+    .string()
+    .trim()
+    .min(1, "Search query is required")
+    .max(255, "Search query must be 255 characters or less"),
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
+  folderId: z
+    .string()
+    .cuid("Invalid folder ID format")
+    .nullable()
+    .optional(),
+  favoriteOnly: z
+    .string()
+    .transform((val) => val === "true")
+    .optional(),
+  tagIds: z
+    .string()
+    .transform((val) => (val ? val.split(",").filter(Boolean) : undefined))
+    .pipe(
+      z.array(z.string().cuid("Invalid tag ID format")).optional()
+    )
+    .optional(),
+});
+
+export type SearchQuerySchemaInput = z.infer<typeof searchQuerySchema>;
