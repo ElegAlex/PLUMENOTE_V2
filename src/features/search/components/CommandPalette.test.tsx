@@ -74,6 +74,28 @@ vi.mock("@/features/notes/hooks/useNotes", () => ({
   })),
 }));
 
+// Mock useFolders for FolderFilter (Story 6.3)
+vi.mock("@/features/notes/hooks/useFolders", () => ({
+  useFolders: vi.fn(() => ({
+    folders: [
+      { id: "folder-1", name: "Documents", parentId: null, children: [] },
+      { id: "folder-2", name: "Archives", parentId: null, children: [] },
+    ],
+    isLoading: false,
+    isFetching: false,
+    error: null,
+    isCreating: false,
+    createError: null,
+    createFolder: vi.fn(),
+    createFolderAsync: vi.fn(),
+    isDeleting: false,
+    deleteError: null,
+    deleteFolder: vi.fn(),
+    deleteFolderAsync: vi.fn(),
+    refetch: vi.fn(),
+  })),
+}));
+
 import { CommandPalette } from "./CommandPalette";
 import { useSearchNotes } from "../hooks/useSearchNotes";
 import { useNotes } from "@/features/notes/hooks/useNotes";
@@ -270,5 +292,186 @@ describe("CommandPalette", () => {
     fireEvent.keyDown(document, { key: "Escape" });
 
     expect(mockClose).toHaveBeenCalled();
+  });
+
+  // Story 6.3: Folder Filter Integration Tests
+  describe("Folder Filter (Story 6.3)", () => {
+    it("should render FolderFilter component", () => {
+      vi.mocked(useCommandPaletteStore).mockReturnValue({
+        isOpen: true,
+        close: mockClose,
+        open: mockOpen,
+        toggle: vi.fn(),
+      });
+
+      render(<CommandPalette />, { wrapper: createWrapper() });
+
+      // FolderFilter renders a "Filtrer" button when no filter is active
+      expect(screen.getByRole("button", { name: /filtrer par dossier/i })).toBeInTheDocument();
+    });
+
+    it("should pass folderId to useSearchNotes when folder is selected", async () => {
+      vi.mocked(useCommandPaletteStore).mockReturnValue({
+        isOpen: true,
+        close: mockClose,
+        open: mockOpen,
+        toggle: vi.fn(),
+      });
+
+      vi.mocked(useSearchNotes).mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isFetching: false,
+      } as ReturnType<typeof useSearchNotes>);
+
+      render(<CommandPalette />, { wrapper: createWrapper() });
+
+      // Open folder filter popover
+      const filterButton = screen.getByRole("button", { name: /filtrer par dossier/i });
+      await userEvent.click(filterButton);
+
+      // Select a folder
+      await waitFor(() => {
+        expect(screen.getByText("Documents")).toBeInTheDocument();
+      });
+      await userEvent.click(screen.getByText("Documents"));
+
+      // Verify useSearchNotes was called with the correct folderId
+      await waitFor(() => {
+        expect(useSearchNotes).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ folderId: "folder-1" })
+        );
+      });
+    });
+
+    it("should update placeholder when folder filter is active", async () => {
+      vi.mocked(useCommandPaletteStore).mockReturnValue({
+        isOpen: true,
+        close: mockClose,
+        open: mockOpen,
+        toggle: vi.fn(),
+      });
+
+      render(<CommandPalette />, { wrapper: createWrapper() });
+
+      // Initial placeholder
+      expect(screen.getByPlaceholderText("Rechercher une note...")).toBeInTheDocument();
+
+      // Open folder filter and select a folder
+      const filterButton = screen.getByRole("button", { name: /filtrer par dossier/i });
+      await userEvent.click(filterButton);
+
+      await waitFor(() => {
+        expect(screen.getByText("Documents")).toBeInTheDocument();
+      });
+      await userEvent.click(screen.getByText("Documents"));
+
+      // Placeholder should update to show filtered context
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Rechercher dans Documents.../)).toBeInTheDocument();
+      });
+    });
+
+    it("should maintain folder filter while searching", async () => {
+      vi.mocked(useCommandPaletteStore).mockReturnValue({
+        isOpen: true,
+        close: mockClose,
+        open: mockOpen,
+        toggle: vi.fn(),
+      });
+
+      // Mock search hook that tracks calls
+      const searchMock = vi.fn().mockReturnValue({
+        data: mockSearchData,
+        isLoading: false,
+        isFetching: false,
+      });
+      vi.mocked(useSearchNotes).mockImplementation(searchMock);
+
+      render(<CommandPalette />, { wrapper: createWrapper() });
+
+      // Select a folder first
+      const filterButton = screen.getByRole("button", { name: /filtrer par dossier/i });
+      await userEvent.click(filterButton);
+
+      await waitFor(() => {
+        expect(screen.getByText("Documents")).toBeInTheDocument();
+      });
+      await userEvent.click(screen.getByText("Documents"));
+
+      // Type a search query
+      const input = screen.getByRole("combobox");
+      await userEvent.type(input, "test");
+
+      // Verify useSearchNotes is being called (multiple times due to renders)
+      // The folder filter should be maintained during search
+      expect(useSearchNotes).toHaveBeenCalled();
+
+      // The badge should still be visible indicating filter is active
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /supprimer le filtre/i })).toBeInTheDocument();
+      });
+    });
+
+    it("should show active filter badge with folder name", async () => {
+      vi.mocked(useCommandPaletteStore).mockReturnValue({
+        isOpen: true,
+        close: mockClose,
+        open: mockOpen,
+        toggle: vi.fn(),
+      });
+
+      render(<CommandPalette />, { wrapper: createWrapper() });
+
+      // Select a folder
+      const filterButton = screen.getByRole("button", { name: /filtrer par dossier/i });
+      await userEvent.click(filterButton);
+
+      await waitFor(() => {
+        expect(screen.getByText("Documents")).toBeInTheDocument();
+      });
+      await userEvent.click(screen.getByText("Documents"));
+
+      // Badge should show the folder name
+      await waitFor(() => {
+        // Look for the badge containing the folder name
+        const badge = screen.getAllByText("Documents")[0];
+        expect(badge).toBeInTheDocument();
+      });
+    });
+
+    it("should clear folder filter when X button on badge is clicked", async () => {
+      vi.mocked(useCommandPaletteStore).mockReturnValue({
+        isOpen: true,
+        close: mockClose,
+        open: mockOpen,
+        toggle: vi.fn(),
+      });
+
+      render(<CommandPalette />, { wrapper: createWrapper() });
+
+      // Select a folder
+      const filterButton = screen.getByRole("button", { name: /filtrer par dossier/i });
+      await userEvent.click(filterButton);
+
+      await waitFor(() => {
+        expect(screen.getByText("Documents")).toBeInTheDocument();
+      });
+      await userEvent.click(screen.getByText("Documents"));
+
+      // Wait for badge to appear
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /supprimer le filtre/i })).toBeInTheDocument();
+      });
+
+      // Click the X button to clear filter
+      await userEvent.click(screen.getByRole("button", { name: /supprimer le filtre/i }));
+
+      // Placeholder should return to default
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText("Rechercher une note...")).toBeInTheDocument();
+      });
+    });
   });
 });

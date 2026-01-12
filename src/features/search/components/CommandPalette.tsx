@@ -5,8 +5,10 @@
  *
  * Provides a Ctrl+K searchable command palette for notes, folders, and actions.
  * Uses FTS-powered search from Story 6.1.
+ * Supports folder filtering from Story 6.3.
  *
  * @see Story 6.2: Command Palette et Recherche
+ * @see Story 6.3: Filtrage des Résultats
  */
 
 import { useState, useCallback, useEffect } from "react";
@@ -20,6 +22,7 @@ import {
   Clock,
   Settings,
   Loader2,
+  Search,
 } from "lucide-react";
 
 import {
@@ -35,6 +38,7 @@ import {
 import { useCommandPaletteStore } from "@/stores/commandPaletteStore";
 import { useSearchNotes, SearchResultNote } from "../hooks/useSearchNotes";
 import { useNotes } from "@/features/notes/hooks/useNotes";
+import { FolderFilter } from "./FolderFilter";
 
 /**
  * Sanitize HTML highlight from search results
@@ -132,12 +136,17 @@ export function CommandPalette() {
   const { isOpen, close } = useCommandPaletteStore();
   const [search, setSearch] = useState("");
 
+  // Folder filter state (Story 6.3)
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedFolderName, setSelectedFolderName] = useState<string | null>(null);
+
   // Search results (only when search has content)
+  // Pass folderId to filter results by folder (Story 6.3)
   const {
     data: searchData,
     isLoading: isSearching,
     isFetching: isSearchFetching,
-  } = useSearchNotes(search);
+  } = useSearchNotes(search, { folderId: selectedFolderId ?? undefined });
 
   // Recent notes (for empty search state)
   const { notes: recentNotes, isLoading: isLoadingRecent } = useNotes({
@@ -154,12 +163,29 @@ export function CommandPalette() {
     enabled: isOpen && !search.trim(),
   });
 
-  // Reset search when closing
+  // Reset search and folder filter when closing
   useEffect(() => {
     if (!isOpen) {
       setSearch("");
+      setSelectedFolderId(null);
+      setSelectedFolderName(null);
     }
   }, [isOpen]);
+
+  // Handle folder filter selection (Story 6.3)
+  const handleFolderSelect = useCallback(
+    (folderId: string | null, folderName: string | null) => {
+      setSelectedFolderId(folderId);
+      setSelectedFolderName(folderName);
+    },
+    []
+  );
+
+  // Clear folder filter (for "search all folders" action)
+  const handleClearFolderFilter = useCallback(() => {
+    setSelectedFolderId(null);
+    setSelectedFolderName(null);
+  }, []);
 
   // Navigate to a note
   const handleSelectNote = useCallback(
@@ -192,6 +218,7 @@ export function CommandPalette() {
   const searchResults = searchData?.data ?? [];
   const hasSearchResults = searchResults.length > 0;
   const isLoading = isSearching || isSearchFetching;
+  const hasActiveFolderFilter = selectedFolderId !== null;
 
   return (
     <CommandDialog
@@ -201,8 +228,16 @@ export function CommandPalette() {
       description="Rechercher des notes, dossiers et actions"
       showCloseButton={false}
     >
+      {/* Filter bar (Story 6.3) */}
+      <div className="flex items-center gap-2 border-b px-3 py-2">
+        <FolderFilter
+          selectedFolderId={selectedFolderId}
+          selectedFolderName={selectedFolderName}
+          onFolderSelect={handleFolderSelect}
+        />
+      </div>
       <CommandInput
-        placeholder="Rechercher une note..."
+        placeholder={hasActiveFolderFilter ? `Rechercher dans ${selectedFolderName}...` : "Rechercher une note..."}
         value={search}
         onValueChange={setSearch}
       />
@@ -214,12 +249,23 @@ export function CommandPalette() {
           </div>
         )}
 
-        {/* Empty state with create option */}
+        {/* Empty state with create option (Story 6.3: folder-aware message) */}
         {hasSearchQuery && !isLoading && !hasSearchResults && (
           <>
             <CommandEmpty>
-              Aucun résultat pour &quot;{search}&quot;
+              {hasActiveFolderFilter
+                ? `Aucun résultat pour "${search}" dans ${selectedFolderName}`
+                : `Aucun résultat pour "${search}"`}
             </CommandEmpty>
+            {/* Suggestion to search all folders when filter is active (Story 6.3 AC #5) */}
+            {hasActiveFolderFilter && (
+              <CommandGroup heading="Suggestions">
+                <CommandItem onSelect={handleClearFolderFilter}>
+                  <Search className="h-4 w-4" />
+                  <span>Rechercher dans tous les dossiers</span>
+                </CommandItem>
+              </CommandGroup>
+            )}
             <CommandGroup heading="Actions">
               <CommandItem onSelect={handleCreateNoteWithTitle}>
                 <Plus className="h-4 w-4" />
