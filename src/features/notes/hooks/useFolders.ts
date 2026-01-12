@@ -32,6 +32,8 @@ export const folderKeys = {
   treeWithNotes: () => folderKeys.treesWithNotes(),
   details: () => [...folderKeys.all, "detail"] as const,
   detail: (id: string) => [...folderKeys.details(), id] as const,
+  paths: () => [...folderKeys.all, "path"] as const,
+  path: (id: string) => [...folderKeys.paths(), id] as const,
 };
 
 interface FoldersListResponse {

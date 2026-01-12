@@ -113,6 +113,8 @@ export function useFolder(folderId: string, options: UseFolderOptions = {}) {
       // Invalidate folders list and tree to refresh
       queryClient.invalidateQueries({ queryKey: folderKeys.lists() });
       queryClient.invalidateQueries({ queryKey: folderKeys.trees() });
+      // Invalidate path cache for breadcrumb updates (Story 5.5)
+      queryClient.invalidateQueries({ queryKey: folderKeys.paths() });
     },
   });
 

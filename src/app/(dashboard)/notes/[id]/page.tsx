@@ -13,6 +13,7 @@
  * @see Story 3.5: Suppression d'une Note
  * @see Story 4.3: Edition Simultanee
  * @see Story 4.5: Indicateur de Presence
+ * @see Story 5.5: Fil d'Ariane (Breadcrumb)
  * @see FR8: Un utilisateur peut editer une note en Markdown avec previsualisation live
  */
 
@@ -38,6 +39,7 @@ import { useNotes } from "@/features/notes/hooks/useNotes";
 import { useAutoSave } from "@/features/notes/hooks/useAutoSave";
 import { NoteHeader, type SaveStatus } from "@/features/notes/components/NoteHeader";
 import { TagsPanel } from "@/features/notes/components/TagsPanel";
+import { NoteBreadcrumb } from "@/features/notes/components/NoteBreadcrumb";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -334,6 +336,15 @@ export default function NotePage({ params }: NotePageProps) {
           <Trash2 className="h-5 w-5" />
         </Button>
       </div>
+
+      {/* Breadcrumb Navigation (Story 5.5) */}
+      {note.folderId && (
+        <NoteBreadcrumb
+          noteTitle={title}
+          folderId={note.folderId}
+          className="mb-4"
+        />
+      )}
 
       {/* Tags Panel (Story 3.6) */}
       <TagsPanel
