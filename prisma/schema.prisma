@@ -32,6 +32,7 @@ model User {
   notes       Note[]       @relation("NotesCreated")
   folders     Folder[]     @relation("FoldersCreated")
   tags        Tag[]
+  noteViews   UserNoteView[] @relation("UserNoteViews")  // Story 6.4: Recently viewed notes
 }
 
 model Account {
@@ -178,6 +179,9 @@ model Note {
   // Tags relationship (Story 3.5)
   tags         NoteTag[]
 
+  // Story 6.4: Recently viewed tracking
+  views        UserNoteView[] @relation("NoteViews")
+
   // Full-text search preparation (Epic 6)
   searchVector Unsupported("tsvector")?
 
@@ -227,4 +231,26 @@ model NoteTag {
 
   @@id([noteId, tagId])
   @@index([tagId])
+}
+
+// ============================================
+// UserNoteView Model (Story 6.4 - Recently Viewed Notes)
+// ============================================
+
+model UserNoteView {
+  id        String   @id @default(cuid())
+  viewedAt  DateTime @default(now())  // Last view timestamp (updated on each view)
+
+  // User who viewed the note
+  userId    String
+  user      User     @relation("UserNoteViews", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Note that was viewed
+  noteId    String
+  note      Note     @relation("NoteViews", fields: [noteId], references: [id], onDelete: Cascade)
+
+  // One entry per user+note (upsert on view)
+  @@unique([userId, noteId])
+  // Optimized index for fetching recent views per user
+  @@index([userId, viewedAt(sort: Desc)])
 }

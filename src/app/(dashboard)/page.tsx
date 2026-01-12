@@ -17,7 +17,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RecentNotes, FavoriteNotes, useNotes } from "@/features/notes";
+import { RecentNotes, FavoriteNotes, RecentlyViewedNotes, useNotes } from "@/features/notes";
 import { SearchBar } from "@/features/search";
 
 /**
@@ -173,12 +173,17 @@ export default function HomePage() {
         <QuickStats />
       </section>
 
-      {/* Notes Sections: Favorites + Recent */}
+      {/* Notes Sections: Recently Viewed + Favorites + Recent Modified */}
+      {/* Story 6.4: Add recently viewed notes section */}
+      <section aria-label="Notes consultées récemment" className="mb-8">
+        <RecentlyViewedNotes limit={5} />
+      </section>
+
       <div className="grid gap-8 lg:grid-cols-2">
         <section aria-label="Notes favorites">
           <FavoriteNotes limit={5} />
         </section>
-        <section aria-label="Notes récentes">
+        <section aria-label="Notes modifiées récemment">
           <RecentNotes limit={5} />
         </section>
       </div>

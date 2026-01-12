@@ -37,6 +37,7 @@ import type { HocuspocusProvider } from "@hocuspocus/provider";
 import { useNote } from "@/features/notes/hooks/useNote";
 import { useNotes } from "@/features/notes/hooks/useNotes";
 import { useAutoSave } from "@/features/notes/hooks/useAutoSave";
+import { useTrackNoteView } from "@/features/notes/hooks/useTrackNoteView";
 import { NoteHeader, type SaveStatus } from "@/features/notes/components/NoteHeader";
 import { TagsPanel } from "@/features/notes/components/TagsPanel";
 import { NoteBreadcrumb } from "@/features/notes/components/NoteBreadcrumb";
@@ -64,6 +65,11 @@ export default function NotePage({ params }: NotePageProps) {
   const { note, isLoading, error, updateNoteAsync } = useNote(id);
   const { deleteNoteAsync, restoreNoteAsync } = useNotes({ enabled: false });
   const isOnline = useOnlineStatus();
+
+  // Track note view (Story 6.4: Notes Récentes)
+  // Only track when note is loaded successfully (not during loading or on error)
+  // This prevents unnecessary API calls for non-existent notes
+  useTrackNoteView(note?.id);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 

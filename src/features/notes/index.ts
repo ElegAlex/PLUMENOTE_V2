@@ -1,6 +1,9 @@
 // Notes feature module
 // Barrel exports for notes management feature
 
+// Constants
+export { RECENT_NOTES_LIMIT } from "./constants";
+
 // Types
 export type {
   Note,
@@ -101,6 +104,8 @@ export { useFolders, folderKeys, type UseFoldersOptions } from "./hooks/useFolde
 export { useFolder, type UseFolderOptions } from "./hooks/useFolder";
 export { useMoveNote, type MoveNoteInput, type MoveNoteResult, type UseMoveNoteOptions } from "./hooks/useMoveNote";
 export { useFolderPath } from "./hooks/useFolderPath";
+export { useRecentNotes, recentNotesKeys, type RecentNote, type RecentNotesResponse, type UseRecentNotesOptions } from "./hooks/useRecentNotes";
+export { useTrackNoteView, type UseTrackNoteViewOptions } from "./hooks/useTrackNoteView";
 
 // Components
 export { NoteCard, type NoteCardProps } from "./components/NoteCard";
@@ -114,4 +119,5 @@ export { MoveToFolderDialog, type MoveToFolderDialogProps } from "./components/M
 export { NoteTreeItem, type NoteTreeItemProps } from "./components/NoteTreeItem";
 export { NoteBreadcrumb, type NoteBreadcrumbProps } from "./components/NoteBreadcrumb";
 export { RecentNotes, type RecentNotesProps } from "./components/RecentNotes";
+export { RecentlyViewedNotes, type RecentlyViewedNotesProps } from "./components/RecentlyViewedNotes";
 export { FavoriteNotes, type FavoriteNotesProps } from "./components/FavoriteNotes";

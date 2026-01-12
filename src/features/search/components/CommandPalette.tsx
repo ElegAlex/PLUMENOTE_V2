@@ -20,6 +20,7 @@ import {
   Plus,
   Star,
   Clock,
+  Eye,
   Settings,
   Loader2,
   Search,
@@ -38,6 +39,7 @@ import {
 import { useCommandPaletteStore } from "@/stores/commandPaletteStore";
 import { useSearchNotes, SearchResultNote } from "../hooks/useSearchNotes";
 import { useNotes } from "@/features/notes/hooks/useNotes";
+import { useRecentNotes, type RecentNote } from "@/features/notes/hooks/useRecentNotes";
 import { FolderFilter } from "./FolderFilter";
 
 /**
@@ -129,6 +131,30 @@ function RecentNoteItem({
 }
 
 /**
+ * Recently viewed note item component (Story 6.4)
+ */
+function ViewedNoteItem({
+  note,
+  onSelect,
+}: {
+  note: RecentNote;
+  onSelect: () => void;
+}) {
+  const displayTitle = note.title || "Sans titre";
+
+  return (
+    <CommandItem
+      value={`viewed-${note.id}-${displayTitle}`}
+      onSelect={onSelect}
+      className="flex items-center gap-2"
+    >
+      <Eye className="h-4 w-4 text-muted-foreground" />
+      <span className="flex-1 truncate">{displayTitle}</span>
+    </CommandItem>
+  );
+}
+
+/**
  * Main Command Palette component
  */
 export function CommandPalette() {
@@ -160,6 +186,11 @@ export function CommandPalette() {
   const { notes: favoriteNotes, isLoading: isLoadingFavorites } = useNotes({
     pageSize: 5,
     favoriteOnly: true,
+    enabled: isOpen && !search.trim(),
+  });
+
+  // Recently viewed notes (Story 6.4)
+  const { recentlyViewed, isLoading: isLoadingViewed } = useRecentNotes({
     enabled: isOpen && !search.trim(),
   });
 
@@ -288,10 +319,24 @@ export function CommandPalette() {
           </CommandGroup>
         )}
 
-        {/* Default state: recent and favorites */}
+        {/* Default state: recently viewed, favorites, and recent modified */}
         {!hasSearchQuery && (
           <>
-            {/* Favorites first */}
+            {/* Recently viewed first (Story 6.4 AC #5) */}
+            {/* Note: API /api/notes/recent returns max 5 items, no client-side slice needed */}
+            {recentlyViewed && recentlyViewed.length > 0 && (
+              <CommandGroup heading="Récemment consultées">
+                {recentlyViewed.map((note) => (
+                  <ViewedNoteItem
+                    key={note.id}
+                    note={note}
+                    onSelect={() => handleSelectNote(note.id)}
+                  />
+                ))}
+              </CommandGroup>
+            )}
+
+            {/* Favorites second */}
             {favoriteNotes && favoriteNotes.length > 0 && (
               <CommandGroup heading="Favoris">
                 {favoriteNotes.map((note) => (
@@ -304,9 +349,9 @@ export function CommandPalette() {
               </CommandGroup>
             )}
 
-            {/* Recent notes */}
+            {/* Recent notes (modified) */}
             {recentNotes && recentNotes.length > 0 && (
-              <CommandGroup heading="Notes récentes">
+              <CommandGroup heading="Modifiées récemment">
                 {recentNotes
                   .filter((n) => !n.isFavorite) // Exclude favorites to avoid duplicates
                   .slice(0, 5)
@@ -320,8 +365,8 @@ export function CommandPalette() {
               </CommandGroup>
             )}
 
-            {/* Loading for recent */}
-            {(isLoadingRecent || isLoadingFavorites) && (
+            {/* Loading for all sections */}
+            {(isLoadingRecent || isLoadingFavorites || isLoadingViewed) && (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>

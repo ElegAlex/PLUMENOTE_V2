@@ -30,7 +30,7 @@ vi.mock("next-auth/react", () => ({
   })),
 }));
 
-// Mock useNotes
+// Mock useNotes and useRecentNotes
 const mockCreateNoteAsync = vi.fn();
 vi.mock("@/features/notes", () => ({
   useNotes: vi.fn(() => ({
@@ -41,8 +41,15 @@ vi.mock("@/features/notes", () => ({
     createNoteAsync: mockCreateNoteAsync,
     isCreating: false,
   })),
+  useRecentNotes: vi.fn(() => ({
+    recentlyViewed: [],
+    recentlyModified: [],
+    isLoading: false,
+    error: null,
+  })),
   RecentNotes: () => <div data-testid="recent-notes">Recent Notes</div>,
   FavoriteNotes: () => <div data-testid="favorite-notes">Favorite Notes</div>,
+  RecentlyViewedNotes: () => <div data-testid="recently-viewed-notes">Recently Viewed Notes</div>,
 }));
 
 // Mock SearchBar
@@ -86,10 +93,13 @@ describe("HomePage", () => {
     render(<HomePage />, { wrapper: createWrapper() });
 
     // Date should contain month name in French (checking for common patterns)
+    // Use getAllByText as multiple elements may match month names (e.g., in stats)
     const dateRegex =
       /janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre/i;
-    const dateElement = screen.getByText(dateRegex);
-    expect(dateElement).toBeInTheDocument();
+    const dateElements = screen.getAllByText(dateRegex);
+    expect(dateElements.length).toBeGreaterThan(0);
+    // First match should be the header date
+    expect(dateElements[0]).toBeInTheDocument();
   });
 
   it("should render search bar", () => {
@@ -116,6 +126,12 @@ describe("HomePage", () => {
     render(<HomePage />, { wrapper: createWrapper() });
 
     expect(screen.getByTestId("favorite-notes")).toBeInTheDocument();
+  });
+
+  it("should render recently viewed notes section", () => {
+    render(<HomePage />, { wrapper: createWrapper() });
+
+    expect(screen.getByTestId("recently-viewed-notes")).toBeInTheDocument();
   });
 
   it("should create note and navigate on button click", async () => {
@@ -146,10 +162,13 @@ describe("HomePage", () => {
       document.querySelector('[aria-label="Statistiques"]')
     ).toBeInTheDocument();
     expect(
+      document.querySelector('[aria-label="Notes consultées récemment"]')
+    ).toBeInTheDocument();
+    expect(
       document.querySelector('[aria-label="Notes favorites"]')
     ).toBeInTheDocument();
     expect(
-      document.querySelector('[aria-label="Notes récentes"]')
+      document.querySelector('[aria-label="Notes modifiées récemment"]')
     ).toBeInTheDocument();
   });
 
