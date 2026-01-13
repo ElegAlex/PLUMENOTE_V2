@@ -21,7 +21,6 @@ import {
   FileText,
   Star,
   Search,
-  Plus,
   Menu,
   Network,
 } from "lucide-react";
@@ -29,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
+import { NewNoteButton } from "@/features/templates/components/NewNoteButton";
 import { FolderTree } from "@/features/notes/components/FolderTree";
 import { ResizeHandle } from "./ResizeHandle";
 import { CreateFolderDialog } from "@/features/notes/components/CreateFolderDialog";
@@ -295,20 +295,10 @@ export function Sidebar({ className }: SidebarProps) {
 
       {/* Quick action: New note */}
       <div className="px-2 pb-2">
-        <Link
-          href="/notes/new"
-          className={cn(
-            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium",
-            "bg-primary text-primary-foreground",
-            "hover:bg-primary/90",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            "transition-colors"
-          )}
-          title={!showLabels ? "Nouvelle note (Ctrl+N)" : undefined}
-        >
-          <Plus className="h-4 w-4 shrink-0" />
-          {showLabels && <span>Nouvelle note</span>}
-        </Link>
+        <NewNoteButton
+          showLabel={showLabels}
+          className="w-full justify-start"
+        />
       </div>
 
       <Separator />

@@ -25,6 +25,13 @@ import {
   Loader2,
   Search,
   Network,
+  Server,
+  ListChecks,
+  BookOpen,
+  Users,
+  FolderKanban,
+  FileStack,
+  type LucideIcon,
 } from "lucide-react";
 
 import {
@@ -37,11 +44,31 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command";
+import { toast } from "sonner";
 import { useCommandPaletteStore } from "@/stores/commandPaletteStore";
 import { useSearchNotes, SearchResultNote } from "../hooks/useSearchNotes";
 import { useNotes } from "@/features/notes/hooks/useNotes";
 import { useRecentNotes, type RecentNote } from "@/features/notes/hooks/useRecentNotes";
+import { useTemplates } from "@/features/templates/hooks/useTemplates";
+import type { Template } from "@/features/templates/types";
 import { FolderFilter } from "./FolderFilter";
+
+/**
+ * Icon map for templates
+ * @see Story 7.2: Creation de Note depuis Template
+ */
+const templateIconMap: Record<string, LucideIcon> = {
+  server: Server,
+  "list-checks": ListChecks,
+  "file-text": FileText,
+  "book-open": BookOpen,
+  users: Users,
+  "folder-kanban": FolderKanban,
+};
+
+function getTemplateIcon(iconName: string): LucideIcon {
+  return templateIconMap[iconName] || FileText;
+}
 
 /**
  * Sanitize HTML highlight from search results
@@ -156,12 +183,42 @@ function ViewedNoteItem({
 }
 
 /**
+ * Template item component for command palette
+ * @see Story 7.2: Creation de Note depuis Template
+ */
+function TemplateItem({
+  template,
+  onSelect,
+}: {
+  template: Template;
+  onSelect: () => void;
+}) {
+  const Icon = getTemplateIcon(template.icon);
+  return (
+    <CommandItem
+      value={`template-${template.id}-${template.name}`}
+      onSelect={onSelect}
+      className="flex items-center gap-2"
+    >
+      <Icon className="h-4 w-4 text-primary" />
+      <span className="flex-1 truncate">{template.name}</span>
+      {template.description && (
+        <span className="text-xs text-muted-foreground truncate max-w-40">
+          {template.description}
+        </span>
+      )}
+    </CommandItem>
+  );
+}
+
+/**
  * Main Command Palette component
  */
 export function CommandPalette() {
   const router = useRouter();
   const { isOpen, close } = useCommandPaletteStore();
   const [search, setSearch] = useState("");
+  const [isCreatingFromTemplate, setIsCreatingFromTemplate] = useState(false);
 
   // Folder filter state (Story 6.3)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -194,6 +251,15 @@ export function CommandPalette() {
   const { recentlyViewed, isLoading: isLoadingViewed } = useRecentNotes({
     enabled: isOpen && !search.trim(),
   });
+
+  // Templates for command palette search (Story 7.2)
+  // Only fetch when search contains "template"
+  const searchLower = search.trim().toLowerCase();
+  const showTemplates = searchLower.includes("template");
+  const { data: templatesData, isLoading: isLoadingTemplates } = useTemplates({
+    enabled: isOpen && showTemplates,
+  });
+  const templates = templatesData?.data ?? [];
 
   // Reset search and folder filter when closing
   useEffect(() => {
@@ -251,6 +317,42 @@ export function CommandPalette() {
     router.push("/graph");
     close();
   }, [router, close]);
+
+  // Create note from template (Story 7.2)
+  const handleCreateFromTemplate = useCallback(
+    async (templateContent: string) => {
+      setIsCreatingFromTemplate(true);
+      try {
+        const response = await fetch("/api/notes", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: "Sans titre",
+            content: templateContent,
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.detail || "Erreur lors de la création");
+        }
+
+        const { data: note } = await response.json();
+        toast.success("Note créée depuis le template");
+        close();
+        router.push(`/notes/${note.id}`);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Erreur lors de la création";
+        toast.error(message);
+      } finally {
+        setIsCreatingFromTemplate(false);
+      }
+    },
+    [router, close]
+  );
 
   const hasSearchQuery = search.trim().length > 0;
   const searchResults = searchData?.data ?? [];
@@ -324,6 +426,28 @@ export function CommandPalette() {
               />
             ))}
           </CommandGroup>
+        )}
+
+        {/* Templates (Story 7.2) - shown when search contains "template" */}
+        {hasSearchQuery && showTemplates && (
+          <>
+            {isLoadingTemplates && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {!isLoadingTemplates && templates.length > 0 && (
+              <CommandGroup heading={`Templates (${templates.length})`}>
+                {templates.map((template) => (
+                  <TemplateItem
+                    key={template.id}
+                    template={template}
+                    onSelect={() => handleCreateFromTemplate(template.content)}
+                  />
+                ))}
+              </CommandGroup>
+            )}
+          </>
         )}
 
         {/* Default state: recently viewed, favorites, and recent modified */}
