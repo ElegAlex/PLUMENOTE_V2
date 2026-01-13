@@ -116,6 +116,7 @@ export async function getBacklinks(noteId: string): Promise<{
   id: string;
   title: string;
   linkTitle: string | null;
+  updatedAt: string;
 }[]> {
   const links = await prisma.noteLink.findMany({
     where: { targetNoteId: noteId },
@@ -125,6 +126,7 @@ export async function getBacklinks(noteId: string): Promise<{
           id: true,
           title: true,
           deletedAt: true,
+          updatedAt: true,
         },
       },
     },
@@ -138,6 +140,7 @@ export async function getBacklinks(noteId: string): Promise<{
       id: l.sourceNote.id,
       title: l.sourceNote.title,
       linkTitle: l.linkTitle,
+      updatedAt: l.sourceNote.updatedAt.toISOString(),
     }));
 }
 

@@ -15,6 +15,7 @@
  * @see Story 4.5: Indicateur de Presence
  * @see Story 5.5: Fil d'Ariane (Breadcrumb)
  * @see Story 6.5: Notes Favorites
+ * @see Story 6.7: Panneau Backlinks
  * @see FR8: Un utilisateur peut editer une note en Markdown avec previsualisation live
  */
 
@@ -22,7 +23,7 @@ import { use, useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
-import { Trash2, Star } from "lucide-react";
+import { Trash2, Star, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
@@ -40,9 +41,11 @@ import { useNote } from "@/features/notes/hooks/useNote";
 import { useNotes } from "@/features/notes/hooks/useNotes";
 import { useAutoSave } from "@/features/notes/hooks/useAutoSave";
 import { useTrackNoteView } from "@/features/notes/hooks/useTrackNoteView";
+import { useBacklinks } from "@/features/notes/hooks/useBacklinks";
 import { NoteHeader, type SaveStatus } from "@/features/notes/components/NoteHeader";
 import { TagsPanel } from "@/features/notes/components/TagsPanel";
 import { NoteBreadcrumb } from "@/features/notes/components/NoteBreadcrumb";
+import { BacklinksPanel } from "@/features/notes/components/BacklinksPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -74,6 +77,10 @@ export default function NotePage({ params }: NotePageProps) {
   useTrackNoteView(note?.id);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Backlinks panel state (Story 6.7: Panneau Backlinks)
+  const [showBacklinks, setShowBacklinks] = useState(false);
+  const { backlinks } = useBacklinks(note?.id, { enabled: !!note });
 
   // Track user edits separately from the loaded note
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
@@ -360,6 +367,21 @@ export default function NotePage({ params }: NotePageProps) {
         >
           <Star className={cn("h-5 w-5", note.isFavorite && "fill-current")} />
         </Button>
+        {/* Backlinks button (Story 6.7: Panneau Backlinks) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowBacklinks(true)}
+          className="relative text-muted-foreground hover:text-foreground"
+          aria-label="Voir les backlinks"
+        >
+          <Link2 className="h-5 w-5" />
+          {backlinks.length > 0 && (
+            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] text-primary-foreground flex items-center justify-center">
+              {backlinks.length > 9 ? "9+" : backlinks.length}
+            </span>
+          )}
+        </Button>
         {/* Delete button (Story 3.5) */}
         <Button
           variant="ghost"
@@ -451,6 +473,13 @@ export default function NotePage({ params }: NotePageProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Backlinks panel (Story 6.7: Panneau Backlinks) */}
+      <BacklinksPanel
+        noteId={note.id}
+        open={showBacklinks}
+        onOpenChange={setShowBacklinks}
+      />
     </div>
   );
 }

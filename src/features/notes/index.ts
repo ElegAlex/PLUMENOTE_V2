@@ -106,6 +106,7 @@ export { useMoveNote, type MoveNoteInput, type MoveNoteResult, type UseMoveNoteO
 export { useFolderPath } from "./hooks/useFolderPath";
 export { useRecentNotes, recentNotesKeys, type RecentNote, type RecentNotesResponse, type UseRecentNotesOptions } from "./hooks/useRecentNotes";
 export { useTrackNoteView, type UseTrackNoteViewOptions } from "./hooks/useTrackNoteView";
+export { useBacklinks, type BacklinkInfo, type UseBacklinksOptions } from "./hooks/useBacklinks";
 
 // Components
 export { NoteCard, type NoteCardProps } from "./components/NoteCard";
@@ -121,3 +122,5 @@ export { NoteBreadcrumb, type NoteBreadcrumbProps } from "./components/NoteBread
 export { RecentNotes, type RecentNotesProps } from "./components/RecentNotes";
 export { RecentlyViewedNotes, type RecentlyViewedNotesProps } from "./components/RecentlyViewedNotes";
 export { FavoriteNotes, type FavoriteNotesProps } from "./components/FavoriteNotes";
+export { BacklinksPanel, type BacklinksPanelProps } from "./components/BacklinksPanel";
+export { BacklinkItem, type BacklinkItemProps } from "./components/BacklinkItem";
