@@ -14,6 +14,7 @@
  * @see Story 4.3: Edition Simultanee
  * @see Story 4.5: Indicateur de Presence
  * @see Story 5.5: Fil d'Ariane (Breadcrumb)
+ * @see Story 6.5: Notes Favorites
  * @see FR8: Un utilisateur peut editer une note en Markdown avec previsualisation live
  */
 
@@ -21,7 +22,8 @@ import { use, useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { Trash2, Star } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
 import {
@@ -63,7 +65,7 @@ export default function NotePage({ params }: NotePageProps) {
   const { id } = use(params);
   const router = useRouter();
   const { note, isLoading, error, updateNoteAsync } = useNote(id);
-  const { deleteNoteAsync, restoreNoteAsync } = useNotes({ enabled: false });
+  const { deleteNoteAsync, restoreNoteAsync, toggleFavoriteAsync, isTogglingFavorite } = useNotes({ enabled: false });
   const isOnline = useOnlineStatus();
 
   // Track note view (Story 6.4: Notes Récentes)
@@ -224,6 +226,18 @@ export default function NotePage({ params }: NotePageProps) {
     [updateNoteAsync]
   );
 
+  // Handle favorite toggle (Story 6.5: Notes Favorites)
+  const handleToggleFavorite = useCallback(async () => {
+    if (!note) return;
+    try {
+      await toggleFavoriteAsync(note.id);
+      toast.success(note.isFavorite ? "Retiré des favoris" : "Ajouté aux favoris");
+    } catch (error: unknown) {
+      console.error("Failed to toggle favorite:", error);
+      toast.error("Échec du changement de favori");
+    }
+  }, [note, toggleFavoriteAsync]);
+
   // Handle delete confirmation (Story 3.5)
   const handleDeleteConfirm = useCallback(async () => {
     setShowDeleteDialog(false);
@@ -330,6 +344,22 @@ export default function NotePage({ params }: NotePageProps) {
             className="mt-2"
           />
         )}
+        {/* Favorite button (Story 6.5: Notes Favorites) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleToggleFavorite}
+          disabled={isTogglingFavorite}
+          className={cn(
+            "shrink-0",
+            note.isFavorite
+              ? "text-yellow-500 hover:text-yellow-600"
+              : "text-muted-foreground hover:text-yellow-500"
+          )}
+          aria-label={note.isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
+        >
+          <Star className={cn("h-5 w-5", note.isFavorite && "fill-current")} />
+        </Button>
         {/* Delete button (Story 3.5) */}
         <Button
           variant="ghost"

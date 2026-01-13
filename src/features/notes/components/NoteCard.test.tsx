@@ -338,4 +338,174 @@ describe("NoteCard", () => {
       expect(dataTransfer.effectAllowed).toBe("move");
     });
   });
+
+  describe("favorite toggle (Story 6.5)", () => {
+    const mockFavoriteNote: Note = {
+      ...mockNote,
+      isFavorite: true,
+    };
+
+    it("should render favorite button when onToggleFavorite is provided", () => {
+      const onToggleFavorite = vi.fn();
+      render(<NoteCard note={mockNote} onToggleFavorite={onToggleFavorite} />);
+
+      const favoriteButton = screen.getByRole("button", {
+        name: /ajouter aux favoris/i,
+      });
+      expect(favoriteButton).toBeInTheDocument();
+    });
+
+    it("should not render favorite button when onToggleFavorite is not provided", () => {
+      render(<NoteCard note={mockNote} />);
+
+      const favoriteButton = screen.queryByRole("button", {
+        name: /ajouter aux favoris/i,
+      });
+      expect(favoriteButton).not.toBeInTheDocument();
+    });
+
+    it("should display filled star when note is favorite", () => {
+      const onToggleFavorite = vi.fn();
+      const { container } = render(
+        <NoteCard note={mockFavoriteNote} onToggleFavorite={onToggleFavorite} />
+      );
+
+      const favoriteButton = screen.getByRole("button", {
+        name: /retirer des favoris/i,
+      });
+      expect(favoriteButton).toBeInTheDocument();
+      expect(favoriteButton).toHaveClass("text-yellow-500");
+
+      // Check for filled star (fill-current class on the icon)
+      const starIcon = container.querySelector("svg.fill-current");
+      expect(starIcon).toBeInTheDocument();
+    });
+
+    it("should display empty star when note is not favorite", () => {
+      const onToggleFavorite = vi.fn();
+      const { container } = render(
+        <NoteCard note={mockNote} onToggleFavorite={onToggleFavorite} />
+      );
+
+      const favoriteButton = screen.getByRole("button", {
+        name: /ajouter aux favoris/i,
+      });
+      expect(favoriteButton).toBeInTheDocument();
+
+      // Check that star is not filled
+      const filledStarIcon = container.querySelector("svg.fill-current");
+      expect(filledStarIcon).not.toBeInTheDocument();
+    });
+
+    it("should call onToggleFavorite when favorite button is clicked", async () => {
+      const onToggleFavorite = vi.fn();
+      const user = userEvent.setup();
+
+      render(<NoteCard note={mockNote} onToggleFavorite={onToggleFavorite} />);
+
+      const favoriteButton = screen.getByRole("button", {
+        name: /ajouter aux favoris/i,
+      });
+      await user.click(favoriteButton);
+
+      expect(onToggleFavorite).toHaveBeenCalledWith("note-123");
+    });
+
+    it("should show correct aria-label for non-favorite note", () => {
+      const onToggleFavorite = vi.fn();
+      render(<NoteCard note={mockNote} onToggleFavorite={onToggleFavorite} />);
+
+      expect(
+        screen.getByRole("button", { name: "Ajouter aux favoris" })
+      ).toBeInTheDocument();
+    });
+
+    it("should show correct aria-label for favorite note", () => {
+      const onToggleFavorite = vi.fn();
+      render(
+        <NoteCard note={mockFavoriteNote} onToggleFavorite={onToggleFavorite} />
+      );
+
+      expect(
+        screen.getByRole("button", { name: "Retirer des favoris" })
+      ).toBeInTheDocument();
+    });
+
+    it("should be disabled when isTogglingFavorite is true", () => {
+      const onToggleFavorite = vi.fn();
+      render(
+        <NoteCard
+          note={mockNote}
+          onToggleFavorite={onToggleFavorite}
+          isTogglingFavorite={true}
+        />
+      );
+
+      const favoriteButton = screen.getByRole("button", {
+        name: /ajouter aux favoris/i,
+      });
+      expect(favoriteButton).toBeDisabled();
+    });
+
+    it("should highlight card with yellow ring when note is favorite", () => {
+      const onToggleFavorite = vi.fn();
+      const { container } = render(
+        <NoteCard note={mockFavoriteNote} onToggleFavorite={onToggleFavorite} />
+      );
+
+      const card = container.querySelector("[class*='ring-yellow-400']");
+      expect(card).toBeInTheDocument();
+    });
+
+    it("should show favorite option in dropdown menu", async () => {
+      const onToggleFavorite = vi.fn();
+      const user = userEvent.setup();
+
+      render(<NoteCard note={mockNote} onToggleFavorite={onToggleFavorite} />);
+
+      // Open dropdown menu
+      const menuTrigger = screen.getByRole("button", {
+        name: /actions pour la note/i,
+      });
+      await user.click(menuTrigger);
+
+      expect(screen.getByText("Ajouter aux favoris")).toBeInTheDocument();
+    });
+
+    it("should show remove favorite option in dropdown for favorite notes", async () => {
+      const onToggleFavorite = vi.fn();
+      const user = userEvent.setup();
+
+      render(
+        <NoteCard note={mockFavoriteNote} onToggleFavorite={onToggleFavorite} />
+      );
+
+      // Open dropdown menu
+      const menuTrigger = screen.getByRole("button", {
+        name: /actions pour la note/i,
+      });
+      await user.click(menuTrigger);
+
+      expect(screen.getByText("Retirer des favoris")).toBeInTheDocument();
+    });
+
+    it("should call onToggleFavorite when dropdown favorite option is clicked", async () => {
+      const onToggleFavorite = vi.fn();
+      const user = userEvent.setup();
+
+      render(<NoteCard note={mockNote} onToggleFavorite={onToggleFavorite} />);
+
+      // Open dropdown menu
+      const menuTrigger = screen.getByRole("button", {
+        name: /actions pour la note/i,
+      });
+      await user.click(menuTrigger);
+
+      // Click favorite in dropdown
+      const favoriteMenuItem = screen.getByText("Ajouter aux favoris");
+      await user.click(favoriteMenuItem);
+
+      expect(onToggleFavorite).toHaveBeenCalledWith("note-123");
+    });
+  });
 });
