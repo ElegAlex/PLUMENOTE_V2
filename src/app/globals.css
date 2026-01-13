@@ -204,3 +204,61 @@
 .editor-wrapper .ProseMirror {
   position: relative;
 }
+
+/* ===========================================
+   Internal Links (Story 6-6)
+   =========================================== */
+
+/* Base internal link styling */
+.internal-link {
+  color: var(--primary);
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0 2px;
+  margin: 0 -2px;
+  transition: background-color 0.15s ease;
+}
+
+.internal-link:hover {
+  background-color: color-mix(in oklch, var(--primary) 10%, transparent);
+  text-decoration: underline;
+}
+
+.internal-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 1px;
+}
+
+/* Broken link (target note not found) */
+.internal-link--broken {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+.internal-link--broken:hover {
+  background-color: color-mix(in oklch, var(--destructive) 10%, transparent);
+}
+
+/* Selected internal link in editor */
+.ProseMirror .internal-link.ProseMirror-selectednode {
+  background-color: color-mix(in oklch, var(--primary) 20%, transparent);
+  outline: 2px solid var(--primary);
+  outline-offset: 0;
+}
+
+/* Suggestion popup container positioning */
+.suggestion-popup-container {
+  animation: suggestion-fade-in 0.15s ease-out;
+}
+
+@keyframes suggestion-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

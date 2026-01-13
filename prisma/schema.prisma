@@ -182,6 +182,10 @@ model Note {
   // Story 6.4: Recently viewed tracking
   views        UserNoteView[] @relation("NoteViews")
 
+  // Story 6.6: Internal links (for backlinks in Story 6.7)
+  sourceLinks  NoteLink[] @relation("SourceNote")  // Links from this note to others
+  targetLinks  NoteLink[] @relation("TargetNote")  // Links from other notes to this one (backlinks)
+
   // Full-text search preparation (Epic 6)
   searchVector Unsupported("tsvector")?
 
@@ -253,4 +257,33 @@ model UserNoteView {
   @@unique([userId, noteId])
   // Optimized index for fetching recent views per user
   @@index([userId, viewedAt(sort: Desc)])
+}
+
+// ============================================
+// NoteLink Model (Story 6.6 - Internal Links)
+// ============================================
+
+model NoteLink {
+  id            String   @id @default(cuid())
+
+  // Source note (contains the [[link]])
+  sourceNoteId  String
+  sourceNote    Note     @relation("SourceNote", fields: [sourceNoteId], references: [id], onDelete: Cascade)
+
+  // Target note (being linked to)
+  targetNoteId  String
+  targetNote    Note     @relation("TargetNote", fields: [targetNoteId], references: [id], onDelete: Cascade)
+
+  // Display title at time of link creation (for handling renames)
+  linkTitle     String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Unique link per source-target pair
+  @@unique([sourceNoteId, targetNoteId])
+  // Index for finding backlinks (notes linking TO a target)
+  @@index([targetNoteId])
+  // Index for finding outgoing links (links FROM a source)
+  @@index([sourceNoteId])
 }

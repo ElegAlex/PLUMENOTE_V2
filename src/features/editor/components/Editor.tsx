@@ -10,8 +10,12 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import { forwardRef, useImperativeHandle, useEffect } from "react";
+import { forwardRef, useImperativeHandle, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { InternalLink } from "../extensions/InternalLink";
+import { InternalLinkSuggestion, defaultSearchNotes } from "../extensions/InternalLinkSuggestion";
+import { createSuggestionRender } from "../extensions/suggestion-render";
 
 export interface EditorProps {
   /** Initial content (HTML string) */
@@ -66,8 +70,11 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   },
   ref
 ) {
-  const editor = useEditor({
-    extensions: [
+  const router = useRouter();
+
+  // Build extensions with InternalLink support
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
@@ -105,7 +112,34 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
         placeholder,
         emptyEditorClass: "is-editor-empty",
       }),
+      InternalLink.configure({
+        onNavigate: (noteId) => router.push(`/notes/${noteId}`),
+        onFetchPreview: async (noteId) => {
+          try {
+            const response = await fetch(`/api/notes/${noteId}`);
+            if (!response.ok) return null;
+            const { data } = await response.json();
+            return {
+              title: data.title,
+              content: data.content?.substring(0, 200) || "",
+            };
+          } catch {
+            return null;
+          }
+        },
+      }),
+      InternalLinkSuggestion.configure({
+        suggestion: {
+          items: async ({ query }) => defaultSearchNotes(query),
+          render: createSuggestionRender(),
+        },
+      }),
     ],
+    [placeholder, router]
+  );
+
+  const editor = useEditor({
+    extensions,
     content,
     editable,
     autofocus: autoFocus,

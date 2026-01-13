@@ -19,9 +19,13 @@ import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useEffect, useMemo, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useCollaboration, type ConnectionStatus } from "../hooks/useCollaboration";
 import { SyncStatusIndicator } from "./SyncStatusIndicator";
+import { InternalLink } from "../extensions/InternalLink";
+import { InternalLinkSuggestion, defaultSearchNotes } from "../extensions/InternalLinkSuggestion";
+import { createSuggestionRender } from "../extensions/suggestion-render";
 
 /**
  * Generate a unique color based on user ID using HSL
@@ -89,6 +93,7 @@ export function CollaborativeEditor({
 }: CollaborativeEditorProps) {
   // Get session for user info
   const { data: session } = useSession();
+  const router = useRouter();
 
   // Connect to collaboration server
   const { ydoc, provider, status, isSynced, error } = useCollaboration({
@@ -224,6 +229,28 @@ export function CollaborativeEditor({
       Collaboration.configure({
         document: ydoc,
       }),
+      InternalLink.configure({
+        onNavigate: (targetNoteId) => router.push(`/notes/${targetNoteId}`),
+        onFetchPreview: async (targetNoteId) => {
+          try {
+            const response = await fetch(`/api/notes/${targetNoteId}`);
+            if (!response.ok) return null;
+            const { data } = await response.json();
+            return {
+              title: data.title,
+              content: data.content?.substring(0, 200) || "",
+            };
+          } catch {
+            return null;
+          }
+        },
+      }),
+      InternalLinkSuggestion.configure({
+        suggestion: {
+          items: async ({ query }) => defaultSearchNotes(query),
+          render: createSuggestionRender(),
+        },
+      }),
     ];
 
     // Add CollaborationCursor only when provider is available
@@ -237,7 +264,7 @@ export function CollaborativeEditor({
     }
 
     return baseExtensions;
-  }, [ydoc, provider, placeholder, cursorUser]);
+  }, [ydoc, provider, placeholder, cursorUser, router]);
 
   // Initialize Tiptap editor with Collaboration and CollaborationCursor extensions
   const editor = useEditor(
