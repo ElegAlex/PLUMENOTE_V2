@@ -33,6 +33,7 @@ model User {
   folders     Folder[]     @relation("FoldersCreated")
   tags        Tag[]
   noteViews   UserNoteView[] @relation("UserNoteViews")  // Story 6.4: Recently viewed notes
+  templates   Template[]     @relation("TemplatesCreated") // Story 7.1: Templates
 }
 
 model Account {
@@ -286,4 +287,27 @@ model NoteLink {
   @@index([targetNoteId])
   // Index for finding outgoing links (links FROM a source)
   @@index([sourceNoteId])
+}
+
+// ============================================
+// Template Model (Epic 7 - Templates)
+// ============================================
+
+model Template {
+  id          String    @id @default(cuid())
+  name        String                        // Nom du template (ex: "Fiche Serveur")
+  description String?   @db.Text            // Description du template
+  content     String    @db.Text            // Contenu Markdown du template
+  icon        String    @default("file-text") // Nom de l'icone (lucide-react)
+  isSystem    Boolean   @default(false)     // Templates systeme non-supprimables
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Ownership (peut etre null pour templates systeme seed)
+  createdById String?
+  createdBy   User?     @relation("TemplatesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([isSystem])
+  @@index([createdById])
 }
