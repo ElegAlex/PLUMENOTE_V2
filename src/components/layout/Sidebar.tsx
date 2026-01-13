@@ -23,6 +23,7 @@ import {
   Search,
   Plus,
   Menu,
+  Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -259,6 +260,12 @@ export function Sidebar({ className }: SidebarProps) {
       label: "Recherche",
       icon: Search,
       active: pathname === "/search",
+    },
+    {
+      href: "/graph",
+      label: "Graphe",
+      icon: Network,
+      active: pathname === "/graph",
     },
   ];
 

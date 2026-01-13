@@ -24,6 +24,7 @@ import {
   Settings,
   Loader2,
   Search,
+  Network,
 } from "lucide-react";
 
 import {
@@ -245,6 +246,12 @@ export function CommandPalette() {
     close();
   }, [router, close]);
 
+  // Navigate to graph view (Story 6.8)
+  const handleGraph = useCallback(() => {
+    router.push("/graph");
+    close();
+  }, [router, close]);
+
   const hasSearchQuery = search.trim().length > 0;
   const searchResults = searchData?.data ?? [];
   const hasSearchResults = searchResults.length > 0;
@@ -380,6 +387,10 @@ export function CommandPalette() {
                 <Plus className="h-4 w-4" />
                 <span>Nouvelle note</span>
                 <CommandShortcut>Ctrl+N</CommandShortcut>
+              </CommandItem>
+              <CommandItem onSelect={handleGraph}>
+                <Network className="h-4 w-4" />
+                <span>Vue Graphe</span>
               </CommandItem>
               <CommandItem onSelect={handleSettings}>
                 <Settings className="h-4 w-4" />

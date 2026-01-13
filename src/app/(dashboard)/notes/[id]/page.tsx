@@ -23,7 +23,7 @@ import { use, useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
-import { Trash2, Star, Link2 } from "lucide-react";
+import { Trash2, Star, Link2, Network, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
@@ -48,6 +48,12 @@ import { NoteBreadcrumb } from "@/features/notes/components/NoteBreadcrumb";
 import { BacklinksPanel } from "@/features/notes/components/BacklinksPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -382,6 +388,36 @@ export default function NotePage({ params }: NotePageProps) {
             </span>
           )}
         </Button>
+        {/* Graph view dropdown (Story 6.8 & 6.9: Vue Graphe) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Options du graphe"
+            >
+              <Network className="h-5 w-5" />
+              <ChevronDown className="h-3 w-3 ml-0.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => router.push(`/graph?highlightId=${note.id}`)}
+            >
+              <Network className="h-4 w-4 mr-2" />
+              Graphe global
+            </DropdownMenuItem>
+            {note.folderId && (
+              <DropdownMenuItem
+                onClick={() => router.push(`/graph?highlightId=${note.id}&folderId=${note.folderId}`)}
+              >
+                <Network className="h-4 w-4 mr-2" />
+                Graphe du dossier
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {/* Delete button (Story 3.5) */}
         <Button
           variant="ghost"
