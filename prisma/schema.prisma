@@ -34,6 +34,7 @@ model User {
   tags        Tag[]
   noteViews   UserNoteView[] @relation("UserNoteViews")  // Story 6.4: Recently viewed notes
   templates   Template[]     @relation("TemplatesCreated") // Story 7.1: Templates
+  ownedWorkspaces Workspace[] @relation("WorkspacesOwned") // Story 8.1: Workspaces
 }
 
 model Account {
@@ -136,6 +137,10 @@ model Folder {
   // Notes in this folder
   notes       Note[]
 
+  // Story 8.1: Workspace organization
+  workspaceId String?
+  workspace   Workspace? @relation("WorkspaceFolders", fields: [workspaceId], references: [id], onDelete: SetNull)
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -147,6 +152,7 @@ model Folder {
   @@unique([createdById, name, parentId])
   @@index([createdById])
   @@index([parentId])
+  @@index([workspaceId])
 }
 
 // ============================================
@@ -162,6 +168,10 @@ model Note {
   // Story 5.1: Folder organization
   folderId     String?
   folder       Folder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
+  // Story 8.1: Workspace organization
+  workspaceId  String?
+  workspace    Workspace? @relation("WorkspaceNotes", fields: [workspaceId], references: [id], onDelete: SetNull)
 
   // Story 3.5: Organization features
   isFavorite   Boolean   @default(false)  // Pin/favorite notes
@@ -197,6 +207,7 @@ model Note {
   @@index([sortOrder])
   @@index([deletedAt])
   @@index([folderId])
+  @@index([workspaceId])
 }
 
 // ============================================
@@ -310,4 +321,30 @@ model Template {
 
   @@index([isSystem])
   @@index([createdById])
+}
+
+// ============================================
+// Workspace Model (Epic 8 - Workspaces & Permissions)
+// ============================================
+
+model Workspace {
+  id          String    @id @default(cuid())
+  name        String                        // Nom du workspace
+  description String?   @db.Text            // Description du workspace
+  icon        String    @default("folder")  // Nom de l'icone (lucide-react)
+  isPersonal  Boolean   @default(false)     // Espace personnel = non partageable
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Owner (createur du workspace)
+  ownerId     String
+  owner       User      @relation("WorkspacesOwned", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Contenu du workspace
+  notes       Note[]    @relation("WorkspaceNotes")
+  folders     Folder[]  @relation("WorkspaceFolders")
+
+  @@index([ownerId])
+  @@index([isPersonal])
 }
