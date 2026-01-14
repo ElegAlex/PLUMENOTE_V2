@@ -1,4 +1,7 @@
-import type { Workspace as PrismaWorkspace } from "@prisma/client";
+import type { Workspace as PrismaWorkspace, WorkspaceMember as PrismaWorkspaceMember, WorkspaceRole } from "@prisma/client";
+
+// Re-export WorkspaceRole enum from Prisma
+export { WorkspaceRole } from "@prisma/client";
 
 /**
  * Available icon names for workspaces
@@ -82,3 +85,57 @@ export interface WorkspaceWithCount extends Workspace {
     notes: number;
   };
 }
+
+// ============================================
+// WorkspaceMember Types (Story 8.3 - Permissions)
+// ============================================
+
+/**
+ * WorkspaceMember type for API responses
+ * @see Story 8.3: Permissions par Workspace
+ */
+export type WorkspaceMember = Pick<
+  PrismaWorkspaceMember,
+  | "id"
+  | "role"
+  | "workspaceId"
+  | "userId"
+  | "createdAt"
+  | "updatedAt"
+>;
+
+/**
+ * WorkspaceMember with user info for list views
+ * @see Story 8.3: Permissions par Workspace
+ */
+export interface WorkspaceMemberWithUser extends WorkspaceMember {
+  user: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatar: string | null;
+  };
+}
+
+/**
+ * Input for adding a member to a workspace
+ * @see Story 8.3
+ */
+export interface AddMemberInput {
+  userId: string;
+  role: WorkspaceRole;
+}
+
+/**
+ * Input for updating a member's role
+ * @see Story 8.3
+ */
+export interface UpdateMemberRoleInput {
+  role: WorkspaceRole;
+}
+
+/**
+ * User's role in a workspace (including OWNER pseudo-role)
+ * @see Story 8.3
+ */
+export type UserWorkspaceRole = "OWNER" | WorkspaceRole;

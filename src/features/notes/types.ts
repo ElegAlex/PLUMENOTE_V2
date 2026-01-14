@@ -58,6 +58,7 @@ export interface FolderWithCount extends Folder {
 
 /**
  * Note type for API responses (excludes internal fields like ydoc, searchVector)
+ * @see Story 8.3: Added workspaceId for permission checks
  */
 export type Note = Pick<
   PrismaNote,
@@ -65,6 +66,7 @@ export type Note = Pick<
   | "title"
   | "content"
   | "folderId"
+  | "workspaceId"
   | "isFavorite"
   | "sortOrder"
   | "createdAt"

@@ -136,7 +136,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const workspace = await updateWorkspace(id, session.user.id, parseResult.data);
+    const workspace = await updateWorkspace(id, session.user.id, parseResult.data as Parameters<typeof updateWorkspace>[2]);
 
     return NextResponse.json({ data: workspace });
   } catch (error) {

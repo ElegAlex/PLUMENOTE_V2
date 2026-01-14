@@ -35,6 +35,7 @@ model User {
   noteViews   UserNoteView[] @relation("UserNoteViews")  // Story 6.4: Recently viewed notes
   templates   Template[]     @relation("TemplatesCreated") // Story 7.1: Templates
   ownedWorkspaces Workspace[] @relation("WorkspacesOwned") // Story 8.1: Workspaces
+  workspaceMemberships WorkspaceMember[] @relation("WorkspaceMemberships") // Story 8.3: Workspace permissions
 }
 
 model Account {
@@ -92,13 +93,23 @@ model PasswordResetToken {
 }
 
 // ============================================
-// Role Enum (RBAC)
+// Role Enum (RBAC - Global User Role)
 // ============================================
 
 enum Role {
   ADMIN
   EDITOR
   VIEWER
+}
+
+// ============================================
+// WorkspaceRole Enum (Epic 8.3 - Workspace Permissions)
+// ============================================
+
+enum WorkspaceRole {
+  ADMIN   // Peut gerer workspace + permissions + CRUD notes
+  EDITOR  // Peut CRUD notes, pas gerer permissions
+  VIEWER  // Lecture seule
 }
 
 // ============================================
@@ -345,6 +356,33 @@ model Workspace {
   notes       Note[]    @relation("WorkspaceNotes")
   folders     Folder[]  @relation("WorkspaceFolders")
 
+  // Story 8.3: Membres avec permissions
+  members     WorkspaceMember[] @relation("WorkspaceMembers")
+
   @@index([ownerId])
   @@index([isPersonal])
+}
+
+// ============================================
+// WorkspaceMember Model (Epic 8.3 - Workspace Permissions)
+// ============================================
+
+model WorkspaceMember {
+  id          String         @id @default(cuid())
+  role        WorkspaceRole  @default(VIEWER)
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Relations
+  workspaceId String
+  workspace   Workspace      @relation("WorkspaceMembers", fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  userId      String
+  user        User           @relation("WorkspaceMemberships", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Un user ne peut etre membre qu'une fois par workspace
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
 }

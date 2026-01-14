@@ -30,18 +30,24 @@ const workspaceSelect = {
 } as const;
 
 /**
- * Get all workspaces for a user
+ * Get all workspaces accessible to a user
  *
- * Returns all workspaces owned by the user, ordered by:
+ * Returns all workspaces where user is owner OR member, ordered by:
  * 1. Personal workspaces first
  * 2. Then alphabetically by name
  *
  * @param userId - ID of the user
- * @returns Array of workspaces owned by the user
+ * @returns Array of workspaces accessible to the user
+ * @see Story 8.3: Permissions par Workspace - AC #7
  */
 export async function getWorkspacesByUser(userId: string): Promise<Workspace[]> {
   const workspaces = await prisma.workspace.findMany({
-    where: { ownerId: userId },
+    where: {
+      OR: [
+        { ownerId: userId },
+        { members: { some: { userId } } },
+      ],
+    },
     select: workspaceSelect,
     orderBy: [
       { isPersonal: "desc" }, // Personal workspaces first
@@ -49,7 +55,7 @@ export async function getWorkspacesByUser(userId: string): Promise<Workspace[]> 
     ],
   });
 
-  logger.info({ userId, count: workspaces.length }, "Workspaces listed for user");
+  logger.info({ userId, count: workspaces.length }, "Accessible workspaces listed for user");
   return workspaces;
 }
 
@@ -57,10 +63,11 @@ export async function getWorkspacesByUser(userId: string): Promise<Workspace[]> 
  * Get a workspace by ID
  *
  * @param workspaceId - ID of the workspace to retrieve
- * @param userId - ID of the requesting user (for ownership check)
+ * @param userId - ID of the requesting user (for permission check)
  * @returns The workspace
  * @throws {NotFoundError} If workspace doesn't exist
- * @throws {ForbiddenError} If user is not the owner
+ * @throws {ForbiddenError} If user has no access (not owner and not member)
+ * @see Story 8.3: Permissions par Workspace - AC #7
  */
 export async function getWorkspaceById(
   workspaceId: string,
@@ -68,20 +75,32 @@ export async function getWorkspaceById(
 ): Promise<Workspace> {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
-    select: workspaceSelect,
+    select: {
+      ...workspaceSelect,
+      members: {
+        where: { userId },
+        select: { id: true },
+      },
+    },
   });
 
   if (!workspace) {
     throw new NotFoundError(`Workspace with ID '${workspaceId}' not found`);
   }
 
-  // Only owner can access their workspace
-  if (workspace.ownerId !== userId) {
+  // Check access: owner OR member
+  const isOwner = workspace.ownerId === userId;
+  const isMember = workspace.members.length > 0;
+
+  if (!isOwner && !isMember) {
     throw new ForbiddenError("You do not have permission to access this workspace");
   }
 
+  // Return without members field (not part of Workspace type)
+  const { members: _, ...workspaceData } = workspace;
+
   logger.info({ workspaceId, userId }, "Workspace retrieved");
-  return workspace;
+  return workspaceData;
 }
 
 /**
@@ -113,7 +132,7 @@ export async function createWorkspace(
 /**
  * Update a workspace
  *
- * Only the owner can update their workspace.
+ * Owner or ADMIN can update the workspace.
  * Note: isPersonal cannot be changed after creation.
  *
  * @param workspaceId - ID of the workspace to update
@@ -121,7 +140,8 @@ export async function createWorkspace(
  * @param data - Fields to update
  * @returns Updated workspace
  * @throws {NotFoundError} If workspace doesn't exist
- * @throws {ForbiddenError} If user is not the owner
+ * @throws {ForbiddenError} If user is not owner or ADMIN
+ * @see Story 8.3: Permissions par Workspace - AC #4
  */
 export async function updateWorkspace(
   workspaceId: string,
@@ -130,15 +150,24 @@ export async function updateWorkspace(
 ): Promise<Workspace> {
   const existing = await prisma.workspace.findUnique({
     where: { id: workspaceId },
-    select: { ownerId: true },
+    select: {
+      ownerId: true,
+      members: {
+        where: { userId, role: "ADMIN" },
+        select: { id: true },
+      },
+    },
   });
 
   if (!existing) {
     throw new NotFoundError(`Workspace with ID '${workspaceId}' not found`);
   }
 
-  // Only owner can update
-  if (existing.ownerId !== userId) {
+  // Check permission: owner OR ADMIN
+  const isOwner = existing.ownerId === userId;
+  const isAdmin = existing.members.length > 0;
+
+  if (!isOwner && !isAdmin) {
     throw new ForbiddenError("You do not have permission to update this workspace");
   }
 
@@ -222,19 +251,25 @@ const workspaceWithCountSelect = {
 } as const;
 
 /**
- * Get all workspaces for a user with note counts
+ * Get all workspaces accessible to a user with note counts
  *
- * Returns all workspaces owned by the user with note counts, ordered by:
+ * Returns all workspaces where user is owner OR member, with note counts, ordered by:
  * 1. Personal workspaces first
  * 2. Then alphabetically by name
  *
  * @param userId - ID of the user
- * @returns Array of workspaces with note counts owned by the user
+ * @returns Array of workspaces with note counts accessible to the user
  * @see Story 8.2: Creation et Gestion des Workspaces
+ * @see Story 8.3: Permissions par Workspace - AC #7
  */
 export async function getWorkspacesWithCount(userId: string): Promise<WorkspaceWithCount[]> {
   const workspaces = await prisma.workspace.findMany({
-    where: { ownerId: userId },
+    where: {
+      OR: [
+        { ownerId: userId },
+        { members: { some: { userId } } },
+      ],
+    },
     select: workspaceWithCountSelect,
     orderBy: [
       { isPersonal: "desc" }, // Personal workspaces first
@@ -242,7 +277,7 @@ export async function getWorkspacesWithCount(userId: string): Promise<WorkspaceW
     ],
   });
 
-  logger.info({ userId, count: workspaces.length }, "Workspaces with count listed for user");
+  logger.info({ userId, count: workspaces.length }, "Accessible workspaces with count listed for user");
   return workspaces;
 }
 

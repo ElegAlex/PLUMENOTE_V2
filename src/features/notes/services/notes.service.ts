@@ -8,6 +8,11 @@
 import { prisma } from "@/lib/prisma";
 import { NotFoundError, ForbiddenError } from "@/lib/api-error";
 import { logger } from "@/lib/logger";
+import {
+  canAccessWorkspace,
+  canEditNotes,
+  canDeleteNotes,
+} from "@/features/workspaces/services/permissions.service";
 import type { Note, CreateNoteInput, UpdateNoteInput } from "../types";
 
 /**
@@ -106,12 +111,14 @@ async function fetchNotesRelations(noteIds: string[], folderIds: string[]): Prom
 
 /**
  * Selection fields for Note responses (excludes internal fields)
+ * @see Story 8.3: Added workspaceId for permission checks
  */
 const noteSelect = {
   id: true,
   title: true,
   content: true,
   folderId: true,
+  workspaceId: true,
   isFavorite: true,
   sortOrder: true,
   createdAt: true,
@@ -187,12 +194,13 @@ export async function createNote(
 }
 
 /**
- * Get a note by ID with ownership verification
+ * Get a note by ID with ownership/permission verification
  *
  * Excludes soft-deleted notes (Story 3.5).
+ * Checks workspace permissions if note belongs to a workspace (Story 8.3).
  *
  * @throws {NotFoundError} If note doesn't exist or is deleted
- * @throws {ForbiddenError} If user doesn't own the note
+ * @throws {ForbiddenError} If user doesn't have permission to access the note
  */
 export async function getNoteById(noteId: string, userId: string): Promise<Note> {
   const note = await prisma.note.findUnique({
@@ -212,8 +220,19 @@ export async function getNoteById(noteId: string, userId: string): Promise<Note>
     throw new NotFoundError(`Note with ID '${noteId}' not found`);
   }
 
-  if (note.createdById !== userId) {
-    logger.warn({ noteId, userId, ownerId: note.createdById }, "Unauthorized note access attempt");
+  // Check access permission (Story 8.3)
+  let hasAccess = false;
+
+  if (note.workspaceId) {
+    // Note belongs to a workspace - check workspace permissions
+    hasAccess = await canAccessWorkspace(userId, note.workspaceId);
+  } else {
+    // Personal note (no workspace) - check ownership
+    hasAccess = note.createdById === userId;
+  }
+
+  if (!hasAccess) {
+    logger.warn({ noteId, userId, ownerId: note.createdById, workspaceId: note.workspaceId }, "Unauthorized note access attempt");
     throw new ForbiddenError("You do not have permission to access this note");
   }
 
@@ -280,9 +299,17 @@ export async function getUserNotes(
 
   // Build where clause with optional filters (no search)
   // Exclude soft-deleted notes (Story 3.5)
+  // Include: personal notes + workspace notes where user has access (Story 8.3)
   const where = {
-    createdById: userId,
     deletedAt: null, // Exclude soft-deleted notes
+    OR: [
+      // Personal notes (created by user, no workspace)
+      { createdById: userId, workspaceId: null },
+      // Notes in workspaces owned by user
+      { workspace: { ownerId: userId } },
+      // Notes in workspaces where user is a member
+      { workspace: { members: { some: { userId } } } },
+    ],
     ...(folderId !== undefined && { folderId }), // Filter by folder (null = root level)
     ...(favoriteOnly && { isFavorite: true }),
     ...(tagIds?.length && {
@@ -363,8 +390,13 @@ async function searchNotesWithFTS(
   }
 
   // Build dynamic WHERE conditions
+  // Include: personal notes + workspace notes where user has access (Story 8.3)
   const conditions: string[] = [
-    `"createdById" = $1`,
+    `(
+      ("createdById" = $1 AND "workspaceId" IS NULL) OR
+      EXISTS (SELECT 1 FROM "Workspace" w WHERE w.id = n."workspaceId" AND w."ownerId" = $1) OR
+      EXISTS (SELECT 1 FROM "WorkspaceMember" wm WHERE wm."workspaceId" = n."workspaceId" AND wm."userId" = $1)
+    )`,
     `"deletedAt" IS NULL`,
   ];
   const params: (string | boolean | string[])[] = [userId];
@@ -412,6 +444,7 @@ async function searchNotesWithFTS(
         title: string;
         content: string | null;
         folderId: string | null;
+        workspaceId: string | null;
         isFavorite: boolean;
         sortOrder: number;
         createdAt: Date;
@@ -420,7 +453,7 @@ async function searchNotesWithFTS(
         rank: number;
       }>>(
         `SELECT
-          n.id, n.title, n.content, n."folderId", n."isFavorite", n."sortOrder",
+          n.id, n.title, n.content, n."folderId", n."workspaceId", n."isFavorite", n."sortOrder",
           n."createdAt", n."updatedAt", n."createdById",
           ts_rank("searchVector", to_tsquery('french', $2) || to_tsquery('english', $2)) as rank
         FROM "Note" n
@@ -458,6 +491,7 @@ async function searchNotesWithFTS(
       title: n.title,
       content: n.content,
       folderId: n.folderId,
+      workspaceId: n.workspaceId,
       isFavorite: n.isFavorite,
       sortOrder: n.sortOrder,
       createdAt: n.createdAt,
@@ -508,13 +542,28 @@ async function searchNotesWithLikeFallback(
   const skip = (page - 1) * pageSize;
 
   const where = {
-    createdById: userId,
     deletedAt: null,
-    ...(folderId !== undefined && { folderId }),
-    OR: [
-      { title: { contains: search, mode: "insensitive" as const } },
-      { content: { contains: search, mode: "insensitive" as const } },
+    AND: [
+      // Access control - user can see their personal notes or workspace notes
+      {
+        OR: [
+          // Personal notes (created by user, no workspace)
+          { createdById: userId, workspaceId: null },
+          // Notes in workspaces owned by user
+          { workspace: { ownerId: userId } },
+          // Notes in workspaces where user is a member
+          { workspace: { members: { some: { userId } } } },
+        ],
+      },
+      // Search filter - title or content contains search term
+      {
+        OR: [
+          { title: { contains: search, mode: "insensitive" as const } },
+          { content: { contains: search, mode: "insensitive" as const } },
+        ],
+      },
     ],
+    ...(folderId !== undefined && { folderId }),
     ...(favoriteOnly && { isFavorite: true }),
     ...(tagIds?.length && {
       tags: {
@@ -607,8 +656,13 @@ export async function searchNotes(
   }
 
   // Build dynamic WHERE conditions
+  // Include: personal notes + workspace notes where user has access (Story 8.3)
   const conditions: string[] = [
-    `"createdById" = $1`,
+    `(
+      ("createdById" = $1 AND "workspaceId" IS NULL) OR
+      EXISTS (SELECT 1 FROM "Workspace" w WHERE w.id = n."workspaceId" AND w."ownerId" = $1) OR
+      EXISTS (SELECT 1 FROM "WorkspaceMember" wm WHERE wm."workspaceId" = n."workspaceId" AND wm."userId" = $1)
+    )`,
     `"deletedAt" IS NULL`,
     `"searchVector" @@ (to_tsquery('french', $2) || to_tsquery('english', $2))`,
   ];
@@ -651,6 +705,7 @@ export async function searchNotes(
       title: string;
       content: string | null;
       folderId: string | null;
+      workspaceId: string | null;
       isFavorite: boolean;
       sortOrder: number;
       createdAt: Date;
@@ -660,7 +715,7 @@ export async function searchNotes(
       rank: number;
     }>>(
       `SELECT
-        n.id, n.title, n.content, n."folderId", n."isFavorite", n."sortOrder",
+        n.id, n.title, n.content, n."folderId", n."workspaceId", n."isFavorite", n."sortOrder",
         n."createdAt", n."updatedAt", n."createdById",
         ts_headline(
           'french',
@@ -698,6 +753,7 @@ export async function searchNotes(
       title: n.title,
       content: n.content,
       folderId: n.folderId,
+      workspaceId: n.workspaceId,
       isFavorite: n.isFavorite,
       sortOrder: n.sortOrder,
       createdAt: n.createdAt,
@@ -733,22 +789,23 @@ export async function searchNotes(
 }
 
 /**
- * Update a note with ownership verification
+ * Update a note with ownership/permission verification
  *
  * Excludes soft-deleted notes (Story 3.5).
+ * Checks workspace permissions if note belongs to a workspace (Story 8.3).
  *
  * @throws {NotFoundError} If note doesn't exist or is deleted
- * @throws {ForbiddenError} If user doesn't own the note
+ * @throws {ForbiddenError} If user doesn't have permission to update the note
  */
 export async function updateNote(
   noteId: string,
   userId: string,
   data: UpdateNoteInput
 ): Promise<Note> {
-  // Verify ownership and not deleted
+  // Verify access and not deleted
   const existing = await prisma.note.findUnique({
     where: { id: noteId },
-    select: { createdById: true, deletedAt: true },
+    select: { createdById: true, deletedAt: true, workspaceId: true },
   });
 
   if (!existing) {
@@ -760,7 +817,18 @@ export async function updateNote(
     throw new NotFoundError(`Note with ID '${noteId}' not found`);
   }
 
-  if (existing.createdById !== userId) {
+  // Check edit permission (Story 8.3)
+  let canEdit = false;
+
+  if (existing.workspaceId) {
+    // Note belongs to a workspace - check workspace permissions
+    canEdit = await canEditNotes(userId, existing.workspaceId);
+  } else {
+    // Personal note (no workspace) - check ownership
+    canEdit = existing.createdById === userId;
+  }
+
+  if (!canEdit) {
     throw new ForbiddenError("You do not have permission to update this note");
   }
 
@@ -794,18 +862,19 @@ export async function updateNote(
  * Toggle favorite status for a note
  *
  * Excludes soft-deleted notes (Story 3.5).
+ * Checks workspace permissions if note belongs to a workspace (Story 8.3).
  *
  * @throws {NotFoundError} If note doesn't exist or is deleted
- * @throws {ForbiddenError} If user doesn't own the note
+ * @throws {ForbiddenError} If user doesn't have permission to update the note
  */
 export async function toggleNoteFavorite(
   noteId: string,
   userId: string
 ): Promise<Note> {
-  // Get current state and verify ownership
+  // Get current state and verify access
   const existing = await prisma.note.findUnique({
     where: { id: noteId },
-    select: { createdById: true, isFavorite: true, deletedAt: true },
+    select: { createdById: true, isFavorite: true, deletedAt: true, workspaceId: true },
   });
 
   if (!existing) {
@@ -817,7 +886,18 @@ export async function toggleNoteFavorite(
     throw new NotFoundError(`Note with ID '${noteId}' not found`);
   }
 
-  if (existing.createdById !== userId) {
+  // Check edit permission (Story 8.3)
+  let canEdit = false;
+
+  if (existing.workspaceId) {
+    // Note belongs to a workspace - check workspace permissions
+    canEdit = await canEditNotes(userId, existing.workspaceId);
+  } else {
+    // Personal note (no workspace) - check ownership
+    canEdit = existing.createdById === userId;
+  }
+
+  if (!canEdit) {
     throw new ForbiddenError("You do not have permission to update this note");
   }
 
@@ -835,27 +915,40 @@ export async function toggleNoteFavorite(
 }
 
 /**
- * Soft delete a note with ownership verification
+ * Soft delete a note with ownership/permission verification
  *
  * Sets deletedAt timestamp instead of permanently deleting.
  * Note can be restored within 30 seconds via restoreNote().
+ * Checks workspace permissions if note belongs to a workspace (Story 8.3).
  *
  * @see Story 3.5: Suppression d'une Note
  * @throws {NotFoundError} If note doesn't exist
- * @throws {ForbiddenError} If user doesn't own the note
+ * @throws {ForbiddenError} If user doesn't have permission to delete the note
  */
 export async function deleteNote(noteId: string, userId: string): Promise<void> {
-  // Verify ownership first
+  // Verify access first
   const existing = await prisma.note.findUnique({
     where: { id: noteId },
-    select: { createdById: true, deletedAt: true },
+    select: { createdById: true, deletedAt: true, workspaceId: true },
   });
 
   if (!existing) {
     throw new NotFoundError(`Note with ID '${noteId}' not found`);
   }
 
-  if (existing.createdById !== userId) {
+  // Check delete permission (Story 8.3)
+  let canDelete = false;
+
+  if (existing.workspaceId) {
+    // Note belongs to a workspace - check workspace permissions
+    // Only OWNER and ADMIN can delete notes
+    canDelete = await canDeleteNotes(userId, existing.workspaceId);
+  } else {
+    // Personal note (no workspace) - check ownership
+    canDelete = existing.createdById === userId;
+  }
+
+  if (!canDelete) {
     throw new ForbiddenError("You do not have permission to delete this note");
   }
 
@@ -876,22 +969,34 @@ export async function deleteNote(noteId: string, userId: string): Promise<void> 
  * Restore a soft-deleted note
  *
  * Clears the deletedAt timestamp to restore the note.
+ * Checks workspace permissions if note belongs to a workspace (Story 8.3).
  *
  * @see Story 3.5: Suppression d'une Note
  * @throws {NotFoundError} If note doesn't exist
- * @throws {ForbiddenError} If user doesn't own the note
+ * @throws {ForbiddenError} If user doesn't have permission to restore the note
  */
 export async function restoreNote(noteId: string, userId: string): Promise<void> {
   const existing = await prisma.note.findUnique({
     where: { id: noteId },
-    select: { createdById: true, deletedAt: true },
+    select: { createdById: true, deletedAt: true, workspaceId: true },
   });
 
   if (!existing) {
     throw new NotFoundError(`Note with ID '${noteId}' not found`);
   }
 
-  if (existing.createdById !== userId) {
+  // Check delete permission (restoring requires same permission as deleting)
+  let canRestore = false;
+
+  if (existing.workspaceId) {
+    // Note belongs to a workspace - check workspace permissions
+    canRestore = await canDeleteNotes(userId, existing.workspaceId);
+  } else {
+    // Personal note (no workspace) - check ownership
+    canRestore = existing.createdById === userId;
+  }
+
+  if (!canRestore) {
     throw new ForbiddenError("You do not have permission to restore this note");
   }
 
