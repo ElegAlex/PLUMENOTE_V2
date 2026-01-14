@@ -14,15 +14,17 @@ import { logger } from "@/lib/logger";
 import { createErrorResponse } from "@/lib/api-error";
 import {
   createWorkspace,
-  getWorkspacesByUser,
+  getWorkspacesWithCount,
 } from "@/features/workspaces/services/workspaces.service";
 import { createWorkspaceSchema } from "@/features/workspaces/schemas/workspace.schema";
 
 /**
  * GET /api/workspaces
  *
- * List all workspaces for the authenticated user.
+ * List all workspaces for the authenticated user with note counts.
  * Returns personal workspaces first, then alphabetically by name.
+ *
+ * @see Story 8.2: Creation et Gestion des Workspaces
  */
 export async function GET() {
   try {
@@ -35,7 +37,7 @@ export async function GET() {
       );
     }
 
-    const workspaces = await getWorkspacesByUser(session.user.id);
+    const workspaces = await getWorkspacesWithCount(session.user.id);
 
     return NextResponse.json({ data: workspaces });
   } catch (error) {

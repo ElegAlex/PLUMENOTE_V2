@@ -1,6 +1,28 @@
 import type { Workspace as PrismaWorkspace } from "@prisma/client";
 
 /**
+ * Available icon names for workspaces
+ * @see Story 8.2: Creation et Gestion des Workspaces
+ */
+export type WorkspaceIcon =
+  | "folder"
+  | "briefcase"
+  | "users"
+  | "book"
+  | "code"
+  | "server"
+  | "database"
+  | "globe"
+  | "settings"
+  | "home"
+  | "file-text"
+  | "building"
+  | "layers"
+  | "box"
+  | "archive"
+  | "star";
+
+/**
  * Workspace type for API responses
  * @see Story 8.1: Modele Workspace et Infrastructure
  */
@@ -23,7 +45,7 @@ export type Workspace = Pick<
 export interface CreateWorkspaceInput {
   name: string;
   description?: string | null;
-  icon?: string; // Default: "folder"
+  icon?: WorkspaceIcon; // Default: "folder"
   isPersonal?: boolean; // Default: false
 }
 
@@ -34,7 +56,7 @@ export interface CreateWorkspaceInput {
 export interface UpdateWorkspaceInput {
   name?: string;
   description?: string | null;
-  icon?: string;
+  icon?: WorkspaceIcon;
 }
 
 /**
@@ -49,4 +71,14 @@ export interface WorkspacesListResponse {
  */
 export interface WorkspaceResponse {
   data: Workspace;
+}
+
+/**
+ * Workspace with note count (for list views)
+ * @see Story 8.2: Creation et Gestion des Workspaces
+ */
+export interface WorkspaceWithCount extends Workspace {
+  _count: {
+    notes: number;
+  };
 }

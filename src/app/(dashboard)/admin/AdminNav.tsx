@@ -6,11 +6,12 @@
  * Navigation tabs for admin section.
  *
  * @see Story 7.3 - Gestion des Templates d'Equipe
+ * @see Story 8.2 - Creation et Gestion des Workspaces
  */
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, FileText } from "lucide-react";
+import { Users, FileText, FolderKanban } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -23,6 +24,11 @@ const navItems = [
     href: "/admin/templates",
     label: "Templates",
     icon: FileText,
+  },
+  {
+    href: "/admin/workspaces",
+    label: "Workspaces",
+    icon: FolderKanban,
   },
 ];
 

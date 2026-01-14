@@ -37,6 +37,7 @@ import { useFolders } from "@/features/notes/hooks/useFolders";
 import { useMoveNote } from "@/features/notes/hooks/useMoveNote";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { findFolderNameById } from "@/features/notes/utils/folderUtils";
+import { WorkspaceNav } from "@/features/workspaces/components/WorkspaceNav";
 import type { FolderWithCount, FolderWithChildren } from "@/features/notes/types";
 import { cn } from "@/lib/utils";
 
@@ -315,6 +316,11 @@ export function Sidebar({ className }: SidebarProps) {
           />
         </div>
       )}
+
+      <Separator />
+
+      {/* Workspaces navigation - Story 8.2 */}
+      <WorkspaceNav showLabels={showLabels} />
     </>
   );
 

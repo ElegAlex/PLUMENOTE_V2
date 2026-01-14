@@ -7,12 +7,13 @@
  * - Workspaces with notes cannot be deleted (must move/delete notes first)
  *
  * @see Story 8.1: Modele Workspace et Infrastructure
+ * @see Story 8.2: Creation et Gestion des Workspaces
  */
 
 import { prisma } from "@/lib/prisma";
 import { NotFoundError, ForbiddenError, ConflictError } from "@/lib/api-error";
 import { logger } from "@/lib/logger";
-import type { Workspace, CreateWorkspaceInput, UpdateWorkspaceInput } from "../types";
+import type { Workspace, CreateWorkspaceInput, UpdateWorkspaceInput, WorkspaceWithCount } from "../types";
 
 /**
  * Selection fields for Workspace responses
@@ -200,4 +201,105 @@ export async function deleteWorkspace(
   await prisma.workspace.delete({ where: { id: workspaceId } });
 
   logger.info({ workspaceId, userId }, "Workspace deleted");
+}
+
+/**
+ * Selection fields for Workspace with note count
+ * @see Story 8.2: Creation et Gestion des Workspaces
+ */
+const workspaceWithCountSelect = {
+  id: true,
+  name: true,
+  description: true,
+  icon: true,
+  isPersonal: true,
+  createdAt: true,
+  updatedAt: true,
+  ownerId: true,
+  _count: {
+    select: { notes: true },
+  },
+} as const;
+
+/**
+ * Get all workspaces for a user with note counts
+ *
+ * Returns all workspaces owned by the user with note counts, ordered by:
+ * 1. Personal workspaces first
+ * 2. Then alphabetically by name
+ *
+ * @param userId - ID of the user
+ * @returns Array of workspaces with note counts owned by the user
+ * @see Story 8.2: Creation et Gestion des Workspaces
+ */
+export async function getWorkspacesWithCount(userId: string): Promise<WorkspaceWithCount[]> {
+  const workspaces = await prisma.workspace.findMany({
+    where: { ownerId: userId },
+    select: workspaceWithCountSelect,
+    orderBy: [
+      { isPersonal: "desc" }, // Personal workspaces first
+      { name: "asc" },
+    ],
+  });
+
+  logger.info({ userId, count: workspaces.length }, "Workspaces with count listed for user");
+  return workspaces;
+}
+
+/**
+ * Move all notes from one workspace to another
+ *
+ * @param sourceWorkspaceId - ID of the source workspace
+ * @param targetWorkspaceId - ID of the target workspace
+ * @param userId - ID of the user (must own both workspaces)
+ * @returns Number of notes moved
+ * @throws {NotFoundError} If either workspace doesn't exist
+ * @throws {ForbiddenError} If user doesn't own both workspaces
+ * @see Story 8.2: Creation et Gestion des Workspaces
+ */
+export async function moveNotesToWorkspace(
+  sourceWorkspaceId: string,
+  targetWorkspaceId: string,
+  userId: string
+): Promise<number> {
+  // Verify source workspace exists and user owns it
+  const sourceWorkspace = await prisma.workspace.findUnique({
+    where: { id: sourceWorkspaceId },
+    select: { ownerId: true },
+  });
+
+  if (!sourceWorkspace) {
+    throw new NotFoundError(`Source workspace with ID '${sourceWorkspaceId}' not found`);
+  }
+
+  if (sourceWorkspace.ownerId !== userId) {
+    throw new ForbiddenError("You do not have permission to move notes from this workspace");
+  }
+
+  // Verify target workspace exists and user owns it
+  const targetWorkspace = await prisma.workspace.findUnique({
+    where: { id: targetWorkspaceId },
+    select: { ownerId: true },
+  });
+
+  if (!targetWorkspace) {
+    throw new NotFoundError(`Target workspace with ID '${targetWorkspaceId}' not found`);
+  }
+
+  if (targetWorkspace.ownerId !== userId) {
+    throw new ForbiddenError("You do not have permission to move notes to this workspace");
+  }
+
+  // Move all notes from source to target
+  const result = await prisma.note.updateMany({
+    where: { workspaceId: sourceWorkspaceId },
+    data: { workspaceId: targetWorkspaceId },
+  });
+
+  logger.info(
+    { sourceWorkspaceId, targetWorkspaceId, userId, movedCount: result.count },
+    "Notes moved between workspaces"
+  );
+
+  return result.count;
 }
