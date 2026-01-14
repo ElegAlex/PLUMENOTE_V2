@@ -36,6 +36,10 @@ export {
 
 // Hooks
 export { useTemplates, templateKeys, type UseTemplatesOptions } from "./hooks/useTemplates";
+export {
+  useTemplatesMutation,
+  type UseTemplatesMutationReturn,
+} from "./hooks/useTemplatesMutation";
 
 // Components
 export { TemplateCard, type TemplateCardProps } from "./components/TemplateCard";
@@ -44,3 +48,15 @@ export {
   type TemplateSelectorDialogProps,
 } from "./components/TemplateSelectorDialog";
 export { NewNoteButton, type NewNoteButtonProps } from "./components/NewNoteButton";
+export {
+  IconSelector,
+  iconMap,
+  iconLabels,
+  availableIcons,
+  getIconComponent,
+  type IconSelectorProps,
+} from "./components/IconSelector";
+export { TemplatePreview, type TemplatePreviewProps } from "./components/TemplatePreview";
+export { TemplateForm, type TemplateFormProps } from "./components/TemplateForm";
+export { TemplateList, type TemplateListProps } from "./components/TemplateList";
+export { TemplateDialog, type TemplateDialogProps } from "./components/TemplateDialog";

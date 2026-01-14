@@ -184,12 +184,12 @@ export function CollaborativeEditor({
     }
   }, [provider, onProviderReady]);
 
-  // Build extensions array with optional CollaborationCursor
+  // Build extensions array with optional Collaboration extensions
   const extensions = useMemo(() => {
     const baseExtensions: AnyExtension[] = [
       StarterKit.configure({
-        // Disable built-in undo/redo - Collaboration has its own
-        undoRedo: false,
+        // Disable built-in undo/redo when using Collaboration (it has its own)
+        ...(ydoc ? { undoRedo: false } : {}),
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
           HTMLAttributes: {
@@ -226,9 +226,6 @@ export function CollaborativeEditor({
         placeholder,
         emptyEditorClass: "is-editor-empty",
       }),
-      Collaboration.configure({
-        document: ydoc,
-      }),
       InternalLink.configure({
         onNavigate: (targetNoteId) => router.push(`/notes/${targetNoteId}`),
         onFetchPreview: async (targetNoteId) => {
@@ -253,6 +250,15 @@ export function CollaborativeEditor({
       }),
     ];
 
+    // Add Collaboration extension only when ydoc is available
+    if (ydoc) {
+      baseExtensions.push(
+        Collaboration.configure({
+          document: ydoc,
+        })
+      );
+    }
+
     // Add CollaborationCursor only when provider is available
     if (provider) {
       baseExtensions.push(
@@ -271,6 +277,7 @@ export function CollaborativeEditor({
     {
       extensions,
       editable,
+      immediatelyRender: false, // Prevent SSR hydration mismatch
       editorProps: {
         attributes: {
           class: cn(
@@ -312,8 +319,8 @@ export function CollaborativeEditor({
     }
   }, [status, onConnectionStatusChange]);
 
-  // Loading state
-  if (!editor) {
+  // Loading state - wait for ydoc and editor to be ready
+  if (!ydoc || !editor) {
     return (
       <div className={cn("space-y-2", className)}>
         {showSyncStatus && <SyncStatusIndicator status="connecting" />}

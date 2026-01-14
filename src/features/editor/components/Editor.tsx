@@ -143,6 +143,7 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
     content,
     editable,
     autofocus: autoFocus,
+    immediatelyRender: false, // Prevent SSR hydration mismatch
     editorProps: {
       attributes: {
         class: cn(
