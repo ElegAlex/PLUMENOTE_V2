@@ -2,6 +2,7 @@
  * Tests for the seed script and system templates
  *
  * Story 7.4: Template Fiche Serveur (FR35)
+ * Story 7.5: Template Procedure (FR36)
  *
  * These tests verify:
  * 1. The actual content from system-templates.ts (not duplicated)
@@ -14,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Import actual exports from system-templates.ts (no side effects)
 import {
   FICHE_SERVEUR_CONTENT,
+  PROCEDURE_CONTENT,
   SYSTEM_TEMPLATES,
   type SystemTemplate,
 } from '../prisma/system-templates';
@@ -93,6 +95,124 @@ describe('System Templates', () => {
     });
   });
 
+  describe('PROCEDURE_CONTENT - Real Content Validation (Story 7.5)', () => {
+    // Required sections per AC2
+    const REQUIRED_SECTIONS = [
+      'Objectif',
+      'Prerequis',
+      'Etapes',
+      'Verification',
+      'Depannage',
+      'Contacts',
+    ];
+
+    // Required placeholders per AC3
+    const REQUIRED_PLACEHOLDERS = [
+      '[Nom de la procedure]',
+      '[Decrivez l\'objectif',
+      '[Prerequis',
+      '[Titre de l\'etape]',
+      '[Sous-etape detaillee]',
+      '[Critere de succes',
+      '[Description du probleme]',
+      '[email@example.com]',
+    ];
+
+    it('should export PROCEDURE_CONTENT as a non-empty string', () => {
+      expect(PROCEDURE_CONTENT).toBeDefined();
+      expect(typeof PROCEDURE_CONTENT).toBe('string');
+      expect(PROCEDURE_CONTENT.length).toBeGreaterThan(100);
+    });
+
+    it('should have all required sections (AC2)', () => {
+      for (const section of REQUIRED_SECTIONS) {
+        expect(
+          PROCEDURE_CONTENT,
+          `Missing section: ${section}`
+        ).toContain(section);
+      }
+    });
+
+    it('should have clear placeholders guiding user input (AC3)', () => {
+      for (const placeholder of REQUIRED_PLACEHOLDERS) {
+        expect(
+          PROCEDURE_CONTENT,
+          `Missing placeholder: ${placeholder}`
+        ).toContain(placeholder);
+      }
+    });
+
+    it('should start with a proper Markdown title', () => {
+      expect(PROCEDURE_CONTENT).toMatch(/^# Procedure:/);
+    });
+
+    it('should contain checkboxes for steps and verification (AC6)', () => {
+      // Check for checkbox syntax "- [ ]"
+      expect(PROCEDURE_CONTENT).toContain('- [ ]');
+      // Should have multiple checkboxes
+      const checkboxCount = (PROCEDURE_CONTENT.match(/- \[ \]/g) || []).length;
+      expect(checkboxCount).toBeGreaterThanOrEqual(10);
+    });
+
+    it('should have numbered steps (1.1, 1.2, etc.)', () => {
+      expect(PROCEDURE_CONTENT).toContain('1.1');
+      expect(PROCEDURE_CONTENT).toContain('1.2');
+      expect(PROCEDURE_CONTENT).toContain('2.1');
+    });
+
+    it('should contain Markdown tables for structured data', () => {
+      // Check for table syntax (pipe character and separator row pattern)
+      expect(PROCEDURE_CONTENT).toContain('|');
+      expect(PROCEDURE_CONTENT).toMatch(/\|[-]+\|/);
+    });
+
+    it('should have a Depannage section with problem/cause/solution columns', () => {
+      expect(PROCEDURE_CONTENT).toContain('Probleme');
+      expect(PROCEDURE_CONTENT).toContain('Cause probable');
+      expect(PROCEDURE_CONTENT).toContain('Solution');
+    });
+
+    it('should have blockquotes for notes and warnings', () => {
+      expect(PROCEDURE_CONTENT).toContain('> **Note**:');
+      expect(PROCEDURE_CONTENT).toContain('> **Attention**:');
+    });
+
+    it('should have code block for verification command', () => {
+      expect(PROCEDURE_CONTENT).toContain('```bash');
+    });
+
+    it('should have Historique des modifications section', () => {
+      expect(PROCEDURE_CONTENT).toContain('Historique des modifications');
+      expect(PROCEDURE_CONTENT).toContain('Version');
+      expect(PROCEDURE_CONTENT).toContain('Modification');
+      expect(PROCEDURE_CONTENT).toContain('Auteur');
+    });
+
+    // Story 7.5 Task 5: Content validation for note creation compatibility
+    it('should have content size within note creation limits (< 100KB)', () => {
+      const contentBytes = new TextEncoder().encode(PROCEDURE_CONTENT).length;
+      expect(contentBytes).toBeLessThan(100 * 1024); // 100KB limit per NFR27
+    });
+
+    it('should have valid Markdown structure for editor parsing', () => {
+      // Verify proper heading hierarchy (starts with H1, has H2s)
+      expect(PROCEDURE_CONTENT).toMatch(/^#\s+/m); // H1 exists
+      expect(PROCEDURE_CONTENT).toMatch(/^##\s+/m); // H2 exists
+      // Verify no malformed Markdown (unclosed code blocks)
+      const codeBlockOpens = (PROCEDURE_CONTENT.match(/```/g) || []).length;
+      expect(codeBlockOpens % 2).toBe(0); // Even number = properly closed
+    });
+
+    it('should have checkboxes in standard Markdown format for Tiptap', () => {
+      // Tiptap taskList expects "- [ ]" format at line start
+      expect(PROCEDURE_CONTENT).toMatch(/^- \[ \]/m);
+      // All checkboxes should be properly prefixed with "- "
+      const allCheckboxMatches = PROCEDURE_CONTENT.match(/\[ \]/g) || [];
+      const properCheckboxMatches = PROCEDURE_CONTENT.match(/- \[ \]/g) || [];
+      expect(allCheckboxMatches.length).toBe(properCheckboxMatches.length);
+    });
+  });
+
   describe('SYSTEM_TEMPLATES - Template Definition Validation', () => {
     it('should export SYSTEM_TEMPLATES array', () => {
       expect(SYSTEM_TEMPLATES).toBeDefined();
@@ -138,6 +258,40 @@ describe('System Templates', () => {
       );
 
       expect(ficheServeur?.content).toBe(FICHE_SERVEUR_CONTENT);
+    });
+
+    // Story 7.5: Procedure template tests
+    it('should contain Procedure template (Story 7.5, AC1)', () => {
+      const procedure = SYSTEM_TEMPLATES.find((t) => t.name === 'Procedure');
+      expect(procedure).toBeDefined();
+    });
+
+    it('should have correct properties for Procedure (AC4)', () => {
+      const procedure = SYSTEM_TEMPLATES.find((t) => t.name === 'Procedure');
+
+      expect(procedure).toMatchObject({
+        name: 'Procedure',
+        icon: 'list-checks',
+        isSystem: true,
+      });
+    });
+
+    it('should have a meaningful description for Procedure', () => {
+      const procedure = SYSTEM_TEMPLATES.find((t) => t.name === 'Procedure');
+
+      expect(procedure?.description).toBeDefined();
+      expect(procedure?.description.length).toBeGreaterThan(20);
+      expect(procedure?.description.toLowerCase()).toContain('procedure');
+    });
+
+    it('should use the exported PROCEDURE_CONTENT', () => {
+      const procedure = SYSTEM_TEMPLATES.find((t) => t.name === 'Procedure');
+
+      expect(procedure?.content).toBe(PROCEDURE_CONTENT);
+    });
+
+    it('should contain exactly 2 system templates', () => {
+      expect(SYSTEM_TEMPLATES.length).toBe(2);
     });
 
     it('should have all required SystemTemplate fields', () => {
