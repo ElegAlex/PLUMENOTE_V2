@@ -331,3 +331,259 @@ export async function getAccessibleWorkspacesWithRole(
   logger.info({ userId, count: result.length }, "Accessible workspaces with role listed");
   return result;
 }
+
+// ============================================
+// Folder Permission Functions (Story 8.4)
+// ============================================
+
+/**
+ * Role priority for comparison (lower = more permissions)
+ */
+const ROLE_PRIORITY: Record<WorkspaceRole | "OWNER", number> = {
+  OWNER: 0,
+  ADMIN: 1,
+  EDITOR: 2,
+  VIEWER: 3,
+};
+
+/**
+ * Get the minimum (most restrictive) of two roles
+ *
+ * Used to ensure folder permissions cannot exceed workspace permissions.
+ */
+function getMinRole(
+  role1: UserWorkspaceRole | null,
+  role2: WorkspaceRole | null
+): UserWorkspaceRole | null {
+  if (role1 === null || role2 === null) {
+    return null;
+  }
+
+  const priority1 = ROLE_PRIORITY[role1];
+  const priority2 = ROLE_PRIORITY[role2];
+
+  // Return the role with higher priority number (more restrictive)
+  return priority1 >= priority2 ? role1 : role2;
+}
+
+/**
+ * Get the effective role a user has on a folder
+ *
+ * Algorithm:
+ * 1. Check workspace access (prerequisite)
+ * 2. If folder is private:
+ *    - Owner/ADMIN always have access
+ *    - Others need explicit FolderPermission
+ * 3. If folder is not private:
+ *    - Check for explicit FolderPermission
+ *    - If exists, return MIN(folder role, workspace role)
+ *    - If not, inherit from parent or use workspace role
+ *
+ * @param userId - ID of the user
+ * @param folderId - ID of the folder
+ * @returns Effective role or null if no access
+ */
+export async function getEffectiveFolderRole(
+  userId: string,
+  folderId: string
+): Promise<UserWorkspaceRole | null> {
+  // Get folder with workspace info
+  const folder = await prisma.folder.findUnique({
+    where: { id: folderId },
+    select: {
+      id: true,
+      isPrivate: true,
+      workspaceId: true,
+      createdById: true,
+      parentId: true,
+      permissions: {
+        where: { userId },
+        select: { role: true },
+      },
+    },
+  });
+
+  if (!folder) {
+    return null;
+  }
+
+  // If no workspace, check if user is folder creator
+  if (!folder.workspaceId) {
+    if (folder.createdById === userId) {
+      return "OWNER";
+    }
+    // Check for explicit folder permission
+    const folderPerm = folder.permissions[0];
+    return folderPerm?.role ?? null;
+  }
+
+  // Get workspace role
+  const workspaceRole = await getUserRoleInWorkspace(userId, folder.workspaceId);
+
+  // If no workspace access, no folder access
+  if (workspaceRole === null) {
+    return null;
+  }
+
+  // Owner and ADMIN always have access to all folders (even private)
+  if (workspaceRole === "OWNER" || workspaceRole === "ADMIN") {
+    return workspaceRole;
+  }
+
+  // Check for explicit folder permission
+  const folderPerm = folder.permissions[0];
+
+  if (folder.isPrivate) {
+    // Private folder: need explicit permission (unless owner/admin handled above)
+    if (!folderPerm) {
+      return null;
+    }
+    // Return MIN of workspace role and folder permission
+    return getMinRole(workspaceRole, folderPerm.role);
+  }
+
+  // Non-private folder
+  if (folderPerm) {
+    // Has explicit permission: return MIN of workspace and folder roles
+    return getMinRole(workspaceRole, folderPerm.role);
+  }
+
+  // No explicit permission: check parent hierarchy
+  if (folder.parentId) {
+    const parentRole = await getEffectiveFolderRole(userId, folder.parentId);
+    if (parentRole) {
+      return getMinRole(workspaceRole, parentRole === "OWNER" ? "ADMIN" : parentRole);
+    }
+  }
+
+  // Fall back to workspace role
+  return workspaceRole;
+}
+
+/**
+ * Check if a user can access (view) a folder
+ *
+ * @param userId - ID of the user
+ * @param folderId - ID of the folder
+ * @returns true if user can access the folder
+ */
+export async function canAccessFolder(
+  userId: string,
+  folderId: string
+): Promise<boolean> {
+  const role = await getEffectiveFolderRole(userId, folderId);
+  return role !== null;
+}
+
+/**
+ * Check if a user can edit content in a folder
+ *
+ * Editing requires at least EDITOR role.
+ *
+ * @param userId - ID of the user
+ * @param folderId - ID of the folder
+ * @returns true if user can edit in the folder
+ */
+export async function canEditFolder(
+  userId: string,
+  folderId: string
+): Promise<boolean> {
+  const role = await getEffectiveFolderRole(userId, folderId);
+
+  if (role === null) {
+    return false;
+  }
+
+  // Owner, ADMIN, and EDITOR can edit
+  return role === "OWNER" || role === "ADMIN" || role === "EDITOR";
+}
+
+/**
+ * Check if a user can manage a folder (change permissions, privacy)
+ *
+ * Only workspace owner and ADMIN can manage folder permissions.
+ *
+ * @param userId - ID of the user
+ * @param folderId - ID of the folder
+ * @returns true if user can manage the folder
+ */
+export async function canManageFolder(
+  userId: string,
+  folderId: string
+): Promise<boolean> {
+  // Get folder's workspace
+  const folder = await prisma.folder.findUnique({
+    where: { id: folderId },
+    select: { workspaceId: true, createdById: true },
+  });
+
+  if (!folder) {
+    return false;
+  }
+
+  // If no workspace, only folder creator can manage
+  if (!folder.workspaceId) {
+    return folder.createdById === userId;
+  }
+
+  // Check workspace management permission
+  return canManageWorkspace(userId, folder.workspaceId);
+}
+
+/**
+ * Get all accessible folder IDs for a user within a workspace
+ *
+ * Filters out private folders the user doesn't have access to.
+ *
+ * @param userId - ID of the user
+ * @param workspaceId - ID of the workspace
+ * @returns Array of accessible folder IDs
+ */
+export async function getAccessibleFolderIds(
+  userId: string,
+  workspaceId: string
+): Promise<string[]> {
+  // Get user's workspace role
+  const workspaceRole = await getUserRoleInWorkspace(userId, workspaceId);
+
+  if (workspaceRole === null) {
+    return [];
+  }
+
+  // Owner and ADMIN have access to all folders
+  if (workspaceRole === "OWNER" || workspaceRole === "ADMIN") {
+    const folders = await prisma.folder.findMany({
+      where: { workspaceId },
+      select: { id: true },
+    });
+    return folders.map((f) => f.id);
+  }
+
+  // Get all folders in workspace
+  const folders = await prisma.folder.findMany({
+    where: { workspaceId },
+    select: {
+      id: true,
+      isPrivate: true,
+      permissions: {
+        where: { userId },
+        select: { id: true },
+      },
+    },
+  });
+
+  // Filter: include public folders OR private folders with explicit permission
+  const accessibleFolders = folders.filter((folder) => {
+    if (!folder.isPrivate) {
+      return true; // Public folders accessible to all workspace members
+    }
+    return folder.permissions.length > 0; // Private folders need explicit permission
+  });
+
+  logger.info(
+    { userId, workspaceId, total: folders.length, accessible: accessibleFolders.length },
+    "Accessible folders filtered for user"
+  );
+
+  return accessibleFolders.map((f) => f.id);
+}

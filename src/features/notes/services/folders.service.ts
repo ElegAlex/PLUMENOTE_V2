@@ -10,6 +10,13 @@
 import { prisma } from "@/lib/prisma";
 import { NotFoundError, ForbiddenError, ConflictError } from "@/lib/api-error";
 import { logger } from "@/lib/logger";
+import {
+  canAccessFolder,
+  canEditFolder,
+  canManageFolder,
+  getAccessibleFolderIds,
+  getUserRoleInWorkspace,
+} from "@/features/workspaces/services/permissions.service";
 import type {
   Folder,
   FolderWithChildren,
@@ -30,6 +37,7 @@ const folderSelect = {
   createdAt: true,
   updatedAt: true,
   createdById: true,
+  workspaceId: true,
 } as const;
 
 /**
@@ -49,36 +57,60 @@ const folderWithCountSelect = {
  * Create a new folder
  *
  * @throws {NotFoundError} If parent folder doesn't exist
- * @throws {ForbiddenError} If user doesn't own the parent folder
+ * @throws {ForbiddenError} If user doesn't have permission to create in parent folder
  * @throws {ConflictError} If folder name already exists at same level
+ *
+ * @see Story 8.4: Permissions par Dossier
  */
 export async function createFolder(
   userId: string,
   data: CreateFolderInput
 ): Promise<Folder> {
-  // Verify parent folder exists and belongs to user (if parentId provided)
+  let parentWorkspaceId: string | null = null;
+
+  // Verify parent folder exists and user has permission (if parentId provided)
   if (data.parentId) {
     const parent = await prisma.folder.findUnique({
       where: { id: data.parentId },
-      select: { createdById: true },
+      select: { createdById: true, workspaceId: true },
     });
 
     if (!parent) {
       throw new NotFoundError(`Parent folder with ID '${data.parentId}' not found`);
     }
 
-    if (parent.createdById !== userId) {
-      throw new ForbiddenError("You do not have permission to use this parent folder");
+    // Check permission to create in parent folder (Story 8.4)
+    let canCreate = false;
+
+    if (parent.workspaceId) {
+      // Parent is in a workspace - check folder edit permission
+      canCreate = await canEditFolder(userId, data.parentId);
+      parentWorkspaceId = parent.workspaceId;
+    } else {
+      // Parent is personal - check ownership
+      canCreate = parent.createdById === userId;
+    }
+
+    if (!canCreate) {
+      throw new ForbiddenError("You do not have permission to create folders here");
     }
   }
 
   // Check for duplicate folder name at same level
+  const duplicateWhere = parentWorkspaceId
+    ? {
+        workspaceId: parentWorkspaceId,
+        name: data.name,
+        parentId: data.parentId ?? null,
+      }
+    : {
+        createdById: userId,
+        name: data.name,
+        parentId: data.parentId ?? null,
+      };
+
   const existing = await prisma.folder.findFirst({
-    where: {
-      createdById: userId,
-      name: data.name,
-      parentId: data.parentId ?? null,
-    },
+    where: duplicateWhere,
   });
 
   if (existing) {
@@ -92,19 +124,22 @@ export async function createFolder(
       name: data.name,
       parentId: data.parentId ?? null,
       createdById: userId,
+      workspaceId: parentWorkspaceId,
     },
     select: folderSelect,
   });
 
-  logger.info({ folderId: folder.id, userId, parentId: folder.parentId }, "Folder created");
+  logger.info({ folderId: folder.id, userId, parentId: folder.parentId, workspaceId: folder.workspaceId }, "Folder created");
   return folder;
 }
 
 /**
- * Get a folder by ID with ownership verification
+ * Get a folder by ID with permission verification
  *
  * @throws {NotFoundError} If folder doesn't exist
- * @throws {ForbiddenError} If user doesn't own the folder
+ * @throws {ForbiddenError} If user doesn't have permission to access the folder
+ *
+ * @see Story 8.4: Permissions par Dossier
  */
 export async function getFolderById(folderId: string, userId: string): Promise<Folder> {
   const folder = await prisma.folder.findUnique({
@@ -116,8 +151,19 @@ export async function getFolderById(folderId: string, userId: string): Promise<F
     throw new NotFoundError(`Folder with ID '${folderId}' not found`);
   }
 
-  if (folder.createdById !== userId) {
-    logger.warn({ folderId, userId, ownerId: folder.createdById }, "Unauthorized folder access attempt");
+  // Check folder access permission (Story 8.4)
+  let hasAccess = false;
+
+  if (folder.workspaceId) {
+    // Workspace folder - check folder permissions
+    hasAccess = await canAccessFolder(userId, folderId);
+  } else {
+    // Personal folder (no workspace) - check ownership
+    hasAccess = folder.createdById === userId;
+  }
+
+  if (!hasAccess) {
+    logger.warn({ folderId, userId, ownerId: folder.createdById, workspaceId: folder.workspaceId }, "Unauthorized folder access attempt");
     throw new ForbiddenError("You do not have permission to access this folder");
   }
 
@@ -267,29 +313,42 @@ function buildFolderTree(folders: Folder[]): FolderWithChildren[] {
 }
 
 /**
- * Update a folder with ownership verification
+ * Update a folder with permission verification
  *
  * @throws {NotFoundError} If folder doesn't exist
- * @throws {ForbiddenError} If user doesn't own the folder
+ * @throws {ForbiddenError} If user doesn't have permission to update the folder
  * @throws {ConflictError} If new name already exists at target level
  * @throws {ConflictError} If trying to move folder into itself or its descendants
+ *
+ * @see Story 8.4: Permissions par Dossier
  */
 export async function updateFolder(
   folderId: string,
   userId: string,
   data: UpdateFolderInput
 ): Promise<Folder> {
-  // Verify ownership
+  // Verify folder exists and get workspace info
   const existing = await prisma.folder.findUnique({
     where: { id: folderId },
-    select: { createdById: true, name: true, parentId: true },
+    select: { createdById: true, name: true, parentId: true, workspaceId: true },
   });
 
   if (!existing) {
     throw new NotFoundError(`Folder with ID '${folderId}' not found`);
   }
 
-  if (existing.createdById !== userId) {
+  // Check edit permission (Story 8.4)
+  let canEdit = false;
+
+  if (existing.workspaceId) {
+    // Workspace folder - check folder permissions
+    canEdit = await canEditFolder(userId, folderId);
+  } else {
+    // Personal folder (no workspace) - check ownership
+    canEdit = existing.createdById === userId;
+  }
+
+  if (!canEdit) {
     throw new ForbiddenError("You do not have permission to update this folder");
   }
 
@@ -398,20 +457,33 @@ async function checkIsDescendant(
  * 3. The folder itself is deleted
  *
  * @throws {NotFoundError} If folder doesn't exist
- * @throws {ForbiddenError} If user doesn't own the folder
+ * @throws {ForbiddenError} If user doesn't have permission to delete the folder
+ *
+ * @see Story 8.4: Permissions par Dossier
  */
 export async function deleteFolder(folderId: string, userId: string): Promise<void> {
-  // Verify ownership
+  // Verify folder exists and get info
   const folder = await prisma.folder.findUnique({
     where: { id: folderId },
-    select: { createdById: true, parentId: true },
+    select: { createdById: true, parentId: true, workspaceId: true },
   });
 
   if (!folder) {
     throw new NotFoundError(`Folder with ID '${folderId}' not found`);
   }
 
-  if (folder.createdById !== userId) {
+  // Check manage permission (Story 8.4)
+  let canDelete = false;
+
+  if (folder.workspaceId) {
+    // Workspace folder - only owner/admin can delete folders
+    canDelete = await canManageFolder(userId, folderId);
+  } else {
+    // Personal folder (no workspace) - check ownership
+    canDelete = folder.createdById === userId;
+  }
+
+  if (!canDelete) {
     throw new ForbiddenError("You do not have permission to delete this folder");
   }
 

@@ -11,6 +11,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent, DragEvent } from "react";
+import Link from "next/link";
 import {
   Folder,
   FolderOpen,
@@ -20,6 +21,7 @@ import {
   Edit,
   Trash2,
   FolderPlus,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -368,7 +370,16 @@ export function FolderTreeItem({
                   Renommer
                 </DropdownMenuItem>
               )}
-              {(onCreateSubfolder || onRename) && onDelete && (
+              {/* Permissions link for workspace folders (Story 8.4) */}
+              {folder.workspaceId && (
+                <DropdownMenuItem asChild>
+                  <Link href={`/folders/${folder.id}/permissions`}>
+                    <Shield className="mr-2 h-4 w-4" />
+                    Permissions
+                  </Link>
+                </DropdownMenuItem>
+              )}
+              {(onCreateSubfolder || onRename || folder.workspaceId) && onDelete && (
                 <DropdownMenuSeparator />
               )}
               {onDelete && (

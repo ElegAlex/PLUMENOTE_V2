@@ -36,6 +36,7 @@ model User {
   templates   Template[]     @relation("TemplatesCreated") // Story 7.1: Templates
   ownedWorkspaces Workspace[] @relation("WorkspacesOwned") // Story 8.1: Workspaces
   workspaceMemberships WorkspaceMember[] @relation("WorkspaceMemberships") // Story 8.3: Workspace permissions
+  folderPermissions FolderPermission[] @relation("FolderPermissions") // Story 8.4: Folder permissions
 }
 
 model Account {
@@ -152,6 +153,10 @@ model Folder {
   workspaceId String?
   workspace   Workspace? @relation("WorkspaceFolders", fields: [workspaceId], references: [id], onDelete: SetNull)
 
+  // Story 8.4: Folder permissions
+  isPrivate   Boolean   @default(false)  // Private folder requires explicit permission
+  permissions FolderPermission[] @relation("FolderPermissions")
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -164,6 +169,7 @@ model Folder {
   @@index([createdById])
   @@index([parentId])
   @@index([workspaceId])
+  @@index([isPrivate])
 }
 
 // ============================================
@@ -384,5 +390,30 @@ model WorkspaceMember {
   // Un user ne peut etre membre qu'une fois par workspace
   @@unique([workspaceId, userId])
   @@index([workspaceId])
+  @@index([userId])
+}
+
+// ============================================
+// FolderPermission Model (Epic 8.4 - Folder Permissions)
+// ============================================
+
+model FolderPermission {
+  id          String         @id @default(cuid())
+  role        WorkspaceRole  @default(VIEWER)  // Reuses WorkspaceRole: ADMIN, EDITOR, VIEWER
+
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Target folder
+  folderId    String
+  folder      Folder         @relation("FolderPermissions", fields: [folderId], references: [id], onDelete: Cascade)
+
+  // User with specific permission
+  userId      String
+  user        User           @relation("FolderPermissions", fields: [userId], references: [id], onDelete: Cascade)
+
+  // One user can only have one permission per folder
+  @@unique([folderId, userId])
+  @@index([folderId])
   @@index([userId])
 }

@@ -12,10 +12,11 @@ export type Tag = Pick<PrismaTag, "id" | "name" | "color">;
 /**
  * Folder type for API responses
  * @see Story 5.1: Modèle Folder et Structure Hiérarchique
+ * @see Story 8.4: Permissions par Dossier (added workspaceId)
  */
 export type Folder = Pick<
   PrismaFolder,
-  "id" | "name" | "parentId" | "createdAt" | "updatedAt" | "createdById"
+  "id" | "name" | "parentId" | "createdAt" | "updatedAt" | "createdById" | "workspaceId"
 >;
 
 /**
