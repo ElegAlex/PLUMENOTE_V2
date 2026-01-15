@@ -37,6 +37,7 @@ model User {
   ownedWorkspaces Workspace[] @relation("WorkspacesOwned") // Story 8.1: Workspaces
   workspaceMemberships WorkspaceMember[] @relation("WorkspaceMemberships") // Story 8.3: Workspace permissions
   folderPermissions FolderPermission[] @relation("FolderPermissions") // Story 8.4: Folder permissions
+  versionsCreated NoteVersion[] @relation("VersionsCreated") // Story 9.1: Note versions
 }
 
 model Account {
@@ -213,6 +214,9 @@ model Note {
   // Story 6.6: Internal links (for backlinks in Story 6.7)
   sourceLinks  NoteLink[] @relation("SourceNote")  // Links from this note to others
   targetLinks  NoteLink[] @relation("TargetNote")  // Links from other notes to this one (backlinks)
+
+  // Story 9.1: Version history
+  versions     NoteVersion[] @relation("NoteVersions")
 
   // Full-text search preparation (Epic 6)
   searchVector Unsupported("tsvector")?
@@ -416,4 +420,33 @@ model FolderPermission {
   @@unique([folderId, userId])
   @@index([folderId])
   @@index([userId])
+}
+
+// ============================================
+// NoteVersion Model (Epic 9 - Version History)
+// ============================================
+
+model NoteVersion {
+  id          String    @id @default(cuid())
+  version     Int                            // Version number (auto-increment per note)
+  title       String                         // Title at time of snapshot
+  content     String?   @db.Text             // Markdown content at snapshot
+  ydoc        Bytes?                         // Y.Doc state at snapshot (for CRDT restoration)
+
+  createdAt   DateTime  @default(now())
+
+  // Reference to the note being versioned
+  noteId      String
+  note        Note      @relation("NoteVersions", fields: [noteId], references: [id], onDelete: Cascade)
+
+  // Who created this version (snapshot)
+  createdById String
+  createdBy   User      @relation("VersionsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Composite unique: une seule version N par note
+  @@unique([noteId, version])
+  // Index pour queries par note (historique) - ordered by createdAt desc
+  @@index([noteId, createdAt(sort: Desc)])
+  // Index pour queries par utilisateur
+  @@index([createdById])
 }

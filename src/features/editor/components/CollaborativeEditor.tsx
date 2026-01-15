@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useCollaboration, type ConnectionStatus } from "../hooks/useCollaboration";
 import { SyncStatusIndicator } from "./SyncStatusIndicator";
+import { useVersionSnapshots } from "@/features/versions/hooks/useVersionSnapshots";
 import { InternalLink } from "../extensions/InternalLink";
 import { InternalLinkSuggestion, defaultSearchNotes } from "../extensions/InternalLinkSuggestion";
 import { createSuggestionRender } from "../extensions/suggestion-render";
@@ -101,6 +102,13 @@ export function CollaborativeEditor({
     autoConnect: true,
   });
 
+  // Version snapshots for automatic history tracking (Story 9.1)
+  const { trackActivity: trackSnapshotActivity } = useVersionSnapshots({
+    noteId,
+    isEditing: editable,
+    enabled: true,
+  });
+
   // Compute user info for cursor display and presence
   const cursorUser = useMemo(() => {
     const userId = session?.user?.id || "anonymous";
@@ -119,6 +127,9 @@ export function CollaborativeEditor({
 
   // Update awareness state with current user info and activity
   const updateActivityAwareness = useCallback(() => {
+    // Track activity for version snapshots (Story 9.1)
+    trackSnapshotActivity();
+
     if (!provider?.awareness) return;
 
     const now = Date.now();
@@ -132,7 +143,7 @@ export function CollaborativeEditor({
       ...cursorUser,
       lastActivity: now,
     });
-  }, [provider, cursorUser]);
+  }, [provider, cursorUser, trackSnapshotActivity]);
 
   // Set initial awareness state when provider connects
   useEffect(() => {
