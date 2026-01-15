@@ -80,10 +80,13 @@ export async function getMembersByWorkspace(
 /**
  * Add a member to a workspace
  *
+ * Personal workspaces cannot have members (Story 8.5).
+ *
  * @param workspaceId - ID of the workspace
  * @param data - Member data (userId, role)
  * @returns Created workspace member with user info
  * @throws {NotFoundError} If workspace or user doesn't exist
+ * @throws {ForbiddenError} If workspace is personal (cannot add members)
  * @throws {ConflictError} If user is already a member or is the owner
  */
 export async function addMember(
@@ -93,11 +96,19 @@ export async function addMember(
   // Verify workspace exists and get owner info
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
-    select: { id: true, ownerId: true },
+    select: { id: true, ownerId: true, isPersonal: true },
   });
 
   if (!workspace) {
     throw new NotFoundError(`Workspace with ID '${workspaceId}' not found`);
+  }
+
+  // CRITICAL: Cannot add members to personal workspace (Story 8.5: AC #6)
+  if (workspace.isPersonal) {
+    throw new ForbiddenError(
+      "Impossible d'ajouter des membres à un espace personnel",
+      "workspace-personal-no-members"
+    );
   }
 
   // Cannot add owner as member (they already have full access)

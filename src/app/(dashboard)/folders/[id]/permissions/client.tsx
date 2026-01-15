@@ -38,7 +38,7 @@ import type { WorkspaceRole } from "@prisma/client";
  */
 const roleLabels: Record<WorkspaceRole, string> = {
   ADMIN: "Administrateur",
-  EDITOR: "Editeur",
+  EDITOR: "Éditeur",
   VIEWER: "Lecteur",
 };
 

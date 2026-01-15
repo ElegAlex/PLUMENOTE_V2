@@ -45,9 +45,9 @@ import type { WorkspaceMemberWithUser, WorkspaceRole } from "../types";
  * Role labels in French
  */
 const roleLabels: Record<WorkspaceRole | "OWNER", string> = {
-  OWNER: "Proprietaire",
+  OWNER: "Propriétaire",
   ADMIN: "Administrateur",
-  EDITOR: "Editeur",
+  EDITOR: "Éditeur",
   VIEWER: "Lecteur",
 };
 
@@ -177,7 +177,7 @@ function MemberItem({
             {isOwner && (
               <Badge variant="secondary" className="text-xs">
                 <Crown className="mr-1 h-3 w-3" />
-                Proprietaire
+                Propriétaire
               </Badge>
             )}
             {isCurrentUser && !isOwner && (

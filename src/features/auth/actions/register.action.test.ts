@@ -8,19 +8,43 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerAction, type RegisterState } from './register.action';
 
+// Mock transaction helper
+const mockTx = {
+  user: {
+    create: vi.fn(),
+  },
+  workspace: {
+    create: vi.fn(),
+  },
+  invitation: {
+    update: vi.fn(),
+  },
+};
+
 // Mock Prisma
 vi.mock('@/lib/prisma', () => ({
   prisma: {
     user: {
       findUnique: vi.fn(),
-      create: vi.fn(),
     },
+    invitation: {
+      findUnique: vi.fn(),
+    },
+    $transaction: vi.fn((callback: (tx: typeof mockTx) => Promise<void>) => callback(mockTx)),
   },
 }));
 
 // Mock password utilities
 vi.mock('@/lib/password', () => ({
   hashPassword: vi.fn().mockResolvedValue('$2a$10$hashedpassword'),
+}));
+
+// Mock logger
+vi.mock('@/lib/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    error: vi.fn(),
+  },
 }));
 
 import { prisma } from '@/lib/prisma';
@@ -44,8 +68,8 @@ describe('registerAction', () => {
     vi.clearAllMocks();
     // Default: no existing user
     mockedPrisma.user.findUnique.mockResolvedValue(null);
-    // Default: user creation succeeds
-    mockedPrisma.user.create.mockResolvedValue({
+    // Default: user creation succeeds (inside transaction - Story 8.5)
+    mockTx.user.create.mockResolvedValue({
       id: 'new-user-id',
       name: 'Test User',
       email: 'test@example.com',
@@ -57,6 +81,12 @@ describe('registerAction', () => {
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),
+    });
+    // Default: personal workspace creation succeeds (Story 8.5)
+    mockTx.workspace.create.mockResolvedValue({
+      id: 'personal-workspace-id',
+      name: 'Mon espace',
+      isPersonal: true,
     });
   });
 
@@ -85,10 +115,12 @@ describe('registerAction', () => {
       await registerAction(initialState, formData);
 
       expect(mockedHashPassword).toHaveBeenCalledWith('password123');
-      expect(mockedPrisma.user.create).toHaveBeenCalledWith({
+      // Story 8.5: User creation happens inside transaction
+      expect(mockTx.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           password: '$2a$10$hashedpassword',
         }),
+        select: { id: true },
       });
     });
 
@@ -101,10 +133,32 @@ describe('registerAction', () => {
 
       await registerAction(initialState, formData);
 
-      expect(mockedPrisma.user.create).toHaveBeenCalledWith({
+      // Story 8.5: User creation happens inside transaction
+      expect(mockTx.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           role: 'VIEWER',
         }),
+        select: { id: true },
+      });
+    });
+
+    // Story 8.5: Personal workspace creation on registration
+    it('should create personal workspace for new user', async () => {
+      const formData = createFormData({
+        name: 'John Doe',
+        email: 'john@example.com',
+        password: 'password123',
+      });
+
+      await registerAction(initialState, formData);
+
+      expect(mockTx.workspace.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          name: 'Mon espace',
+          isPersonal: true,
+          ownerId: 'new-user-id',
+        }),
+        select: { id: true },
       });
     });
 
@@ -150,7 +204,8 @@ describe('registerAction', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Un compte existe déjà avec cet email');
-      expect(mockedPrisma.user.create).not.toHaveBeenCalled();
+      // Story 8.5: Transaction shouldn't be called when user already exists
+      expect(mockTx.user.create).not.toHaveBeenCalled();
     });
   });
 
@@ -168,10 +223,12 @@ describe('registerAction', () => {
         where: { email: 'john@example.com' },
         select: { id: true },
       });
-      expect(mockedPrisma.user.create).toHaveBeenCalledWith({
+      // Story 8.5: User creation happens inside transaction
+      expect(mockTx.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           email: 'john@example.com',
         }),
+        select: { id: true },
       });
     });
 
@@ -199,17 +256,20 @@ describe('registerAction', () => {
 
       await registerAction(initialState, formData);
 
-      expect(mockedPrisma.user.create).toHaveBeenCalledWith({
+      // Story 8.5: User creation happens inside transaction
+      expect(mockTx.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           name: 'John Doe',
         }),
+        select: { id: true },
       });
     });
   });
 
   describe('error handling', () => {
     it('should return error when database operation fails', async () => {
-      mockedPrisma.user.create.mockRejectedValue(new Error('Database connection failed'));
+      // Story 8.5: Error in transaction causes the whole transaction to fail
+      mockTx.user.create.mockRejectedValue(new Error('Database connection failed'));
 
       const formData = createFormData({
         name: 'John Doe',
@@ -237,7 +297,8 @@ describe('registerAction', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe('Données invalides');
       expect(result.fieldErrors?.name).toBeDefined();
-      expect(mockedPrisma.user.create).not.toHaveBeenCalled();
+      // Story 8.5: Transaction shouldn't be called on validation error
+      expect(mockTx.user.create).not.toHaveBeenCalled();
     });
 
     it('should return field errors for invalid email', async () => {
@@ -252,7 +313,8 @@ describe('registerAction', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe('Données invalides');
       expect(result.fieldErrors?.email).toBeDefined();
-      expect(mockedPrisma.user.create).not.toHaveBeenCalled();
+      // Story 8.5: Transaction shouldn't be called on validation error
+      expect(mockTx.user.create).not.toHaveBeenCalled();
     });
 
     it('should return field errors for short password', async () => {
@@ -267,7 +329,8 @@ describe('registerAction', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe('Données invalides');
       expect(result.fieldErrors?.password).toBeDefined();
-      expect(mockedPrisma.user.create).not.toHaveBeenCalled();
+      // Story 8.5: Transaction shouldn't be called on validation error
+      expect(mockTx.user.create).not.toHaveBeenCalled();
     });
 
     it('should return multiple field errors', async () => {

@@ -16,7 +16,7 @@ import { WorkspacePermissionsClient } from "./client";
 export const metadata: Metadata = {
   title: "Permissions du Workspace | PlumeNote Admin",
   description:
-    "Gerez les membres et leurs permissions dans ce workspace.",
+    "Gérez les membres et leurs permissions dans ce workspace.",
 };
 
 interface PageProps {
@@ -48,6 +48,7 @@ export default async function WorkspacePermissionsPage({ params }: PageProps) {
       id: true,
       name: true,
       ownerId: true,
+      isPersonal: true, // Story 8.5: Check if personal workspace
       owner: {
         select: {
           id: true,

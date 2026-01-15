@@ -11,7 +11,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Pencil, Trash2, Users } from "lucide-react";
+import { Pencil, Trash2, Users, Lock, User } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   folder: LucideIcons.Folder,
   briefcase: LucideIcons.Briefcase,
   users: LucideIcons.Users,
+  user: LucideIcons.User, // Personal workspace icon (Story 8.5)
   book: LucideIcons.Book,
   code: LucideIcons.Code,
   server: LucideIcons.Server,
@@ -44,8 +45,14 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
 
 /**
  * Get icon component by name
+ *
+ * @param iconName - Icon name from workspace
+ * @param isPersonal - If true, always returns User icon (Story 8.5)
  */
-function getIconComponent(iconName: string) {
+function getIconComponent(iconName: string, isPersonal: boolean = false) {
+  if (isPersonal) {
+    return LucideIcons.User;
+  }
   return iconMap[iconName] || LucideIcons.Folder;
 }
 
@@ -86,6 +93,10 @@ function WorkspaceListSkeleton() {
 
 /**
  * Single workspace item row
+ *
+ * Story 8.5: Personal workspaces have restricted actions:
+ * - No delete button (cannot be deleted)
+ * - Lock icon instead of Users for permissions link
  */
 function WorkspaceItem({
   workspace,
@@ -96,18 +107,24 @@ function WorkspaceItem({
   onEdit: (workspace: Workspace | WorkspaceWithCount) => void;
   onDelete: (workspace: Workspace | WorkspaceWithCount) => void;
 }) {
-  const IconComponent = getIconComponent(workspace.icon);
+  const IconComponent = getIconComponent(workspace.icon, workspace.isPersonal);
   const noteCount = "_count" in workspace ? workspace._count?.notes ?? 0 : null;
 
   return (
     <div
-      className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50"
+      className={`flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-muted/50 ${
+        workspace.isPersonal ? "border-primary/30 bg-primary/5" : ""
+      }`}
       data-testid={`workspace-item-${workspace.id}`}
     >
       <div className="flex items-center gap-4">
         {/* Icon */}
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-          <IconComponent className="h-5 w-5 text-muted-foreground" />
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+          workspace.isPersonal ? "bg-primary/10" : "bg-muted"
+        }`}>
+          <IconComponent className={`h-5 w-5 ${
+            workspace.isPersonal ? "text-primary" : "text-muted-foreground"
+          }`} />
         </div>
 
         {/* Info */}
@@ -115,7 +132,8 @@ function WorkspaceItem({
           <div className="flex items-center gap-2">
             <h3 className="font-medium">{workspace.name}</h3>
             {workspace.isPersonal && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="text-xs gap-1">
+                <Lock className="h-3 w-3" />
                 Personnel
               </Badge>
             )}
@@ -135,6 +153,7 @@ function WorkspaceItem({
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        {/* Story 8.5: Personal workspace shows lock icon, team workspace shows users */}
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -142,14 +161,23 @@ function WorkspaceItem({
                 variant="ghost"
                 size="icon"
                 asChild
-                aria-label={`Gerer les permissions de ${workspace.name}`}
+                aria-label={workspace.isPersonal
+                  ? `Voir les paramètres de confidentialite de ${workspace.name}`
+                  : `Gerer les permissions de ${workspace.name}`
+                }
               >
                 <Link href={`/admin/workspaces/${workspace.id}/permissions`}>
-                  <Users className="h-4 w-4" />
+                  {workspace.isPersonal ? (
+                    <Lock className="h-4 w-4" />
+                  ) : (
+                    <Users className="h-4 w-4" />
+                  )}
                 </Link>
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Permissions</TooltipContent>
+            <TooltipContent>
+              {workspace.isPersonal ? "Privé" : "Permissions"}
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
@@ -169,24 +197,27 @@ function WorkspaceItem({
           </Tooltip>
         </TooltipProvider>
 
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onDelete(workspace)}
-                  aria-label={`Supprimer ${workspace.name}`}
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Supprimer</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {/* Story 8.5: Hide delete button for personal workspaces (AC #5) */}
+        {!workspace.isPersonal && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onDelete(workspace)}
+                    aria-label={`Supprimer ${workspace.name}`}
+                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Supprimer</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
     </div>
   );

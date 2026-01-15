@@ -164,8 +164,14 @@ describe("workspaces.service", () => {
       const result = await getWorkspacesByUser("user-1");
 
       expect(result).toHaveLength(2);
+      // Story 8.3: Query includes both owned and member workspaces
       expect(prisma.workspace.findMany).toHaveBeenCalledWith({
-        where: { ownerId: "user-1" },
+        where: {
+          OR: [
+            { ownerId: "user-1" },
+            { members: { some: { userId: "user-1" } } },
+          ],
+        },
         select: expect.any(Object),
         orderBy: [{ isPersonal: "desc" }, { name: "asc" }],
       });
@@ -179,13 +185,19 @@ describe("workspaces.service", () => {
       expect(result).toHaveLength(0);
     });
 
-    it("should only return workspaces owned by the user", async () => {
+    it("should return workspaces owned by user or where user is member", async () => {
       vi.mocked(prisma.workspace.findMany).mockResolvedValue([mockWorkspace]);
 
       await getWorkspacesByUser("user-1");
 
+      // Story 8.3: Query includes both owned and member workspaces
       expect(prisma.workspace.findMany).toHaveBeenCalledWith({
-        where: { ownerId: "user-1" },
+        where: {
+          OR: [
+            { ownerId: "user-1" },
+            { members: { some: { userId: "user-1" } } },
+          ],
+        },
         select: expect.any(Object),
         orderBy: expect.any(Array),
       });
@@ -194,7 +206,10 @@ describe("workspaces.service", () => {
 
   describe("getWorkspaceById", () => {
     it("should return workspace when found and user is owner", async () => {
-      vi.mocked(prisma.workspace.findUnique).mockResolvedValue(mockWorkspace);
+      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+        ...mockWorkspace,
+        members: [], // Owner doesn't need membership
+      });
 
       const result = await getWorkspaceById("workspace-123", "user-1");
 
@@ -219,8 +234,11 @@ describe("workspaces.service", () => {
       );
     });
 
-    it("should throw ForbiddenError when user is not owner", async () => {
-      vi.mocked(prisma.workspace.findUnique).mockResolvedValue(mockWorkspace);
+    it("should throw ForbiddenError when user is not owner and not member", async () => {
+      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+        ...mockWorkspace,
+        members: [], // No membership for other-user
+      });
 
       await expect(
         getWorkspaceById("workspace-123", "other-user")
@@ -229,12 +247,27 @@ describe("workspaces.service", () => {
         getWorkspaceById("workspace-123", "other-user")
       ).rejects.toThrow("You do not have permission to access this workspace");
     });
+
+    it("should allow access when user is member but not owner", async () => {
+      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+        ...mockWorkspace,
+        members: [{ id: "member-1" }], // User is a member
+      });
+
+      const result = await getWorkspaceById("workspace-123", "other-user");
+
+      expect(result).toMatchObject({
+        id: mockWorkspace.id,
+        name: mockWorkspace.name,
+      });
+    });
   });
 
   describe("updateWorkspace", () => {
     it("should update workspace when user is owner", async () => {
       vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
         ownerId: "user-1",
+        members: [],
       });
       vi.mocked(prisma.workspace.update).mockResolvedValue({
         ...mockWorkspace,
@@ -261,9 +294,10 @@ describe("workspaces.service", () => {
       ).rejects.toThrow(NotFoundError);
     });
 
-    it("should throw ForbiddenError when user is not owner", async () => {
+    it("should throw ForbiddenError when user is not owner and not admin", async () => {
       vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
         ownerId: "other-user",
+        members: [], // No ADMIN membership
       });
 
       await expect(
@@ -277,6 +311,7 @@ describe("workspaces.service", () => {
     it("should only update provided fields", async () => {
       vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
         ownerId: "user-1",
+        members: [],
       });
       vi.mocked(prisma.workspace.update).mockResolvedValue(mockWorkspace);
 
@@ -298,6 +333,7 @@ describe("workspaces.service", () => {
     it("should update icon when provided", async () => {
       vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
         ownerId: "user-1",
+        members: [],
       });
       vi.mocked(prisma.workspace.update).mockResolvedValue({
         ...mockWorkspace,
@@ -314,12 +350,30 @@ describe("workspaces.service", () => {
         select: expect.any(Object),
       });
     });
+
+    it("should allow admin member to update workspace", async () => {
+      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+        ownerId: "other-user",
+        members: [{ id: "admin-member" }], // User is ADMIN
+      });
+      vi.mocked(prisma.workspace.update).mockResolvedValue({
+        ...mockWorkspace,
+        name: "Admin Updated",
+      });
+
+      const result = await updateWorkspace("workspace-123", "user-1", {
+        name: "Admin Updated",
+      });
+
+      expect(result.name).toBe("Admin Updated");
+    });
   });
 
   describe("deleteWorkspace", () => {
     it("should delete workspace when user is owner and workspace is empty", async () => {
       vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
         ownerId: "user-1",
+        isPersonal: false,
         _count: { notes: 0 },
       });
       vi.mocked(prisma.workspace.delete).mockResolvedValue(mockWorkspace);
@@ -342,6 +396,7 @@ describe("workspaces.service", () => {
     it("should throw ForbiddenError when user is not owner", async () => {
       vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
         ownerId: "other-user",
+        isPersonal: false,
         _count: { notes: 0 },
       });
 
@@ -358,6 +413,7 @@ describe("workspaces.service", () => {
     it("should throw ConflictError when workspace has notes", async () => {
       vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
         ownerId: "user-1",
+        isPersonal: false,
         _count: { notes: 5 },
       });
 
@@ -376,12 +432,46 @@ describe("workspaces.service", () => {
     it("should throw ConflictError with correct count when workspace has one note", async () => {
       vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
         ownerId: "user-1",
+        isPersonal: false,
         _count: { notes: 1 },
       });
 
       await expect(
         deleteWorkspace("workspace-123", "user-1")
       ).rejects.toThrow("Cannot delete workspace: it contains 1 note(s)");
+    });
+
+    // Story 8.5: Personal workspace deletion protection
+    it("should throw ForbiddenError when trying to delete personal workspace", async () => {
+      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+        ownerId: "user-1",
+        isPersonal: true,
+        _count: { notes: 0 },
+      });
+
+      await expect(
+        deleteWorkspace("personal-workspace-1", "user-1")
+      ).rejects.toThrow(ForbiddenError);
+      await expect(
+        deleteWorkspace("personal-workspace-1", "user-1")
+      ).rejects.toThrow("Impossible de supprimer votre espace personnel");
+
+      expect(prisma.workspace.delete).not.toHaveBeenCalled();
+    });
+
+    it("should throw ForbiddenError with correct error type for personal workspace deletion", async () => {
+      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+        ownerId: "user-1",
+        isPersonal: true,
+        _count: { notes: 0 },
+      });
+
+      try {
+        await deleteWorkspace("personal-workspace-1", "user-1");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ForbiddenError);
+        expect((error as ForbiddenError).errorType).toBe("workspace-personal-cannot-delete");
+      }
     });
   });
 });

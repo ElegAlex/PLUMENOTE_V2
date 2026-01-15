@@ -189,12 +189,13 @@ export async function updateWorkspace(
  * Delete a workspace
  *
  * Only the owner can delete their workspace.
+ * Personal workspaces cannot be deleted (Story 8.5).
  * Workspaces with notes cannot be deleted (notes must be moved or deleted first).
  *
  * @param workspaceId - ID of the workspace to delete
  * @param userId - ID of the user making the deletion
  * @throws {NotFoundError} If workspace doesn't exist
- * @throws {ForbiddenError} If user is not the owner
+ * @throws {ForbiddenError} If user is not the owner OR if workspace is personal
  * @throws {ConflictError} If workspace contains notes
  */
 export async function deleteWorkspace(
@@ -205,6 +206,7 @@ export async function deleteWorkspace(
     where: { id: workspaceId },
     select: {
       ownerId: true,
+      isPersonal: true,
       _count: {
         select: { notes: true },
       },
@@ -213,6 +215,14 @@ export async function deleteWorkspace(
 
   if (!existing) {
     throw new NotFoundError(`Workspace with ID '${workspaceId}' not found`);
+  }
+
+  // CRITICAL: Cannot delete personal workspace (Story 8.5: AC #5)
+  if (existing.isPersonal) {
+    throw new ForbiddenError(
+      "Impossible de supprimer votre espace personnel",
+      "workspace-personal-cannot-delete"
+    );
   }
 
   // Only owner can delete

@@ -413,5 +413,34 @@ describe("/api/workspaces/[id]", () => {
       expect(response.status).toBe(409);
       expect(body.type).toContain("conflict");
     });
+
+    // Story 8.5: Personal workspace deletion protection
+    it("should return 403 when trying to delete personal workspace", async () => {
+      vi.mocked(auth).mockResolvedValue({
+        user: { id: "user-1", email: "test@example.com" },
+        expires: new Date().toISOString(),
+      });
+      vi.mocked(deleteWorkspace).mockRejectedValue(
+        new ForbiddenError(
+          "Impossible de supprimer votre espace personnel",
+          "workspace-personal-cannot-delete"
+        )
+      );
+
+      const request = createMockRequest(
+        "http://localhost:3000/api/workspaces/clxxxxxxxxxxxxxxxxxxxxxxxxx",
+        { method: "DELETE" }
+      );
+
+      const response = await DELETE(
+        request,
+        createParams("clxxxxxxxxxxxxxxxxxxxxxxxxx")
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(403);
+      expect(body.type).toContain("forbidden");
+      expect(body.detail).toContain("espace personnel");
+    });
   });
 });

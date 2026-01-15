@@ -30,14 +30,14 @@ vi.mock("@/lib/logger", () => ({
 
 vi.mock("@/features/workspaces/services/workspaces.service", () => ({
   createWorkspace: vi.fn(),
-  getWorkspacesByUser: vi.fn(),
+  getWorkspacesWithCount: vi.fn(),
 }));
 
 import { GET, POST } from "./route";
 import { auth } from "@/lib/auth";
 import {
   createWorkspace,
-  getWorkspacesByUser,
+  getWorkspacesWithCount,
 } from "@/features/workspaces/services/workspaces.service";
 
 describe("/api/workspaces", () => {
@@ -72,7 +72,7 @@ describe("/api/workspaces", () => {
         user: { id: "user-1", email: "test@example.com" },
         expires: new Date().toISOString(),
       });
-      vi.mocked(getWorkspacesByUser).mockResolvedValue([mockWorkspace]);
+      vi.mocked(getWorkspacesWithCount).mockResolvedValue([mockWorkspace]);
 
       const response = await GET();
       const body = await response.json();
@@ -80,7 +80,7 @@ describe("/api/workspaces", () => {
       expect(response.status).toBe(200);
       expect(body.data).toHaveLength(1);
       expect(body.data[0].id).toBe(mockWorkspace.id);
-      expect(getWorkspacesByUser).toHaveBeenCalledWith("user-1");
+      expect(getWorkspacesWithCount).toHaveBeenCalledWith("user-1");
     });
 
     it("should return empty array when user has no workspaces", async () => {
@@ -88,7 +88,7 @@ describe("/api/workspaces", () => {
         user: { id: "user-1", email: "test@example.com" },
         expires: new Date().toISOString(),
       });
-      vi.mocked(getWorkspacesByUser).mockResolvedValue([]);
+      vi.mocked(getWorkspacesWithCount).mockResolvedValue([]);
 
       const response = await GET();
       const body = await response.json();
@@ -102,7 +102,7 @@ describe("/api/workspaces", () => {
         user: { id: "user-1", email: "test@example.com" },
         expires: new Date().toISOString(),
       });
-      vi.mocked(getWorkspacesByUser).mockRejectedValue(new Error("DB error"));
+      vi.mocked(getWorkspacesWithCount).mockRejectedValue(new Error("DB error"));
 
       const response = await GET();
       const body = await response.json();

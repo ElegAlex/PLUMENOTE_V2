@@ -73,11 +73,17 @@ export class NotFoundError extends Error {
 
 /**
  * Custom error class for "forbidden" errors
+ *
+ * @param message - Error message
+ * @param errorType - Optional RFC 7807 error type (e.g., "workspace-personal-cannot-delete")
  */
 export class ForbiddenError extends Error {
-  constructor(message: string) {
+  errorType?: string;
+
+  constructor(message: string, errorType?: string) {
     super(message);
     this.name = "ForbiddenError";
+    this.errorType = errorType;
   }
 }
 

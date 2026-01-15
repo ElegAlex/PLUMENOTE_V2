@@ -24,6 +24,7 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   folder: LucideIcons.Folder,
   briefcase: LucideIcons.Briefcase,
   users: LucideIcons.Users,
+  user: LucideIcons.User, // Personal workspace icon (Story 8.5)
   book: LucideIcons.Book,
   code: LucideIcons.Code,
   server: LucideIcons.Server,
@@ -39,7 +40,11 @@ const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
   star: LucideIcons.Star,
 };
 
-function getIconComponent(iconName: string) {
+function getIconComponent(iconName: string, isPersonal: boolean = false) {
+  // Personal workspace always uses User icon (Story 8.5: AC #3)
+  if (isPersonal) {
+    return LucideIcons.User;
+  }
   return iconMap[iconName] || LucideIcons.Folder;
 }
 
@@ -124,47 +129,89 @@ export function WorkspaceNav({ showLabels = true, className }: WorkspaceNavProps
     return null; // Don't show section if no workspaces
   }
 
+  // Separate personal workspace from team workspaces (Story 8.5: AC #3)
+  const personalWorkspace = workspaces.find((ws) => ws.isPersonal);
+  const teamWorkspaces = workspaces.filter((ws) => !ws.isPersonal);
+
   return (
     <div className={cn("px-2 py-2", className)} data-testid="workspace-nav">
-      {/* Section header */}
-      <div className="flex items-center gap-2 px-3 py-1">
-        <ChevronRight className="h-3 w-3 text-muted-foreground" />
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Workspaces
-        </span>
-      </div>
+      {/* Personal workspace section (Story 8.5: AC #3) */}
+      {personalWorkspace && (
+        <>
+          <div className="flex items-center gap-2 px-3 py-1">
+            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Mon espace
+            </span>
+          </div>
+          <nav className="mt-1 mb-3" aria-label="Espace personnel">
+            {(() => {
+              const Icon = getIconComponent(personalWorkspace.icon, true);
+              const isActive = pathname === `/workspaces/${personalWorkspace.id}`;
 
-      {/* Workspace list */}
-      <nav className="mt-1 space-y-0.5" aria-label="Workspaces">
-        {workspaces.map((workspace) => {
-          const Icon = getIconComponent(workspace.icon);
-          const isActive = pathname === `/workspaces/${workspace.id}`;
+              return (
+                <Link
+                  key={personalWorkspace.id}
+                  href={`/workspaces/${personalWorkspace.id}`}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm",
+                    "hover:bg-accent hover:text-accent-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "transition-colors",
+                    isActive && "bg-accent text-accent-foreground",
+                    "border border-border/50 bg-muted/30" // Distinct visual style for personal
+                  )}
+                  data-testid={`workspace-nav-item-${personalWorkspace.id}`}
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-primary" />
+                  <span className="truncate">{personalWorkspace.name}</span>
+                  <LucideIcons.Lock
+                    className="h-3 w-3 text-muted-foreground ml-auto"
+                    aria-label="Espace privé"
+                  />
+                </Link>
+              );
+            })()}
+          </nav>
+        </>
+      )}
 
-          return (
-            <Link
-              key={workspace.id}
-              href={`/workspaces/${workspace.id}`}
-              className={cn(
-                "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm",
-                "hover:bg-accent hover:text-accent-foreground",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                "transition-colors",
-                isActive && "bg-accent text-accent-foreground"
-              )}
-              data-testid={`workspace-nav-item-${workspace.id}`}
-            >
-              <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <span className="truncate">{workspace.name}</span>
-              {workspace.isPersonal && (
-                <LucideIcons.Lock
-                  className="h-3 w-3 text-muted-foreground ml-auto"
-                  aria-label="Workspace personnel"
-                />
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+      {/* Team workspaces section */}
+      {teamWorkspaces.length > 0 && (
+        <>
+          <div className="flex items-center gap-2 px-3 py-1">
+            <ChevronRight className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              Workspaces
+            </span>
+          </div>
+
+          <nav className="mt-1 space-y-0.5" aria-label="Workspaces">
+            {teamWorkspaces.map((workspace) => {
+              const Icon = getIconComponent(workspace.icon);
+              const isActive = pathname === `/workspaces/${workspace.id}`;
+
+              return (
+                <Link
+                  key={workspace.id}
+                  href={`/workspaces/${workspace.id}`}
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm",
+                    "hover:bg-accent hover:text-accent-foreground",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "transition-colors",
+                    isActive && "bg-accent text-accent-foreground"
+                  )}
+                  data-testid={`workspace-nav-item-${workspace.id}`}
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{workspace.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </>
+      )}
     </div>
   );
 }

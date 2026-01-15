@@ -13,6 +13,10 @@ import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/password';
 import { logger } from '@/lib/logger';
 import { registerSchema, type RegisterFormData } from '../schemas/register.schema';
+import {
+  PERSONAL_WORKSPACE_NAME,
+  PERSONAL_WORKSPACE_ICON,
+} from '@/features/workspaces/services/personal-workspace.service';
 
 /**
  * State returned by the register action
@@ -113,16 +117,34 @@ export async function registerAction(
   try {
     const hashedPassword = await hashPassword(password);
 
-    // Use transaction to create user and mark invitation as used
+    // Use transaction to create user, personal workspace, and mark invitation as used
     await prisma.$transaction(async (tx) => {
-      await tx.user.create({
+      // Create user
+      const user = await tx.user.create({
         data: {
           name,
           email,
           password: hashedPassword,
           role: 'VIEWER',
         },
+        select: { id: true },
       });
+
+      // Create personal workspace for the user (Story 8.5: AC #1, #7)
+      const personalWorkspace = await tx.workspace.create({
+        data: {
+          name: PERSONAL_WORKSPACE_NAME,
+          icon: PERSONAL_WORKSPACE_ICON,
+          isPersonal: true,
+          ownerId: user.id,
+        },
+        select: { id: true },
+      });
+
+      logger.info(
+        { userId: user.id, workspaceId: personalWorkspace.id },
+        'Personal workspace created for new user'
+      );
 
       // Mark invitation as used if present
       if (invitation) {

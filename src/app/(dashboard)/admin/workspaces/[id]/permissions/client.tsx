@@ -11,7 +11,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, ArrowLeft, Crown, Shield, Edit3, Eye } from "lucide-react";
+import { Plus, ArrowLeft, Crown, Shield, Edit3, Eye, Lock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -21,6 +21,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/components/ui/alert";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { MembersList } from "@/features/workspaces/components/MembersList";
 import { AddMemberDialog } from "@/features/workspaces/components/AddMemberDialog";
@@ -31,9 +36,9 @@ import type { WorkspaceRole } from "@/features/workspaces/types";
  * Role labels in French
  */
 const roleLabels: Record<WorkspaceRole | "OWNER", string> = {
-  OWNER: "Proprietaire",
+  OWNER: "Propriétaire",
   ADMIN: "Administrateur",
-  EDITOR: "Editeur",
+  EDITOR: "Éditeur",
   VIEWER: "Lecteur",
 };
 
@@ -72,6 +77,7 @@ interface WorkspacePermissionsClientProps {
     id: string;
     name: string;
     ownerId: string;
+    isPersonal: boolean; // Story 8.5: Personal workspace flag
     owner: {
       id: string;
       name: string | null;
@@ -106,6 +112,85 @@ export function WorkspacePermissionsClient({
 
   const OwnerRoleIcon = getRoleIcon("OWNER");
 
+  // Story 8.5: Personal workspace - show special message (AC #6)
+  if (workspace.isPersonal) {
+    return (
+      <div className="space-y-6">
+        {/* Back link */}
+        <div>
+          <Link
+            href="/admin/workspaces"
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Retour aux workspaces
+          </Link>
+        </div>
+
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-3">
+            <User className="h-6 w-6 text-primary" />
+            {workspace.name}
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Espace personnel prive
+          </p>
+        </div>
+
+        {/* Personal workspace alert */}
+        <Alert className="border-primary/50 bg-primary/5">
+          <Lock className="h-4 w-4 text-primary" />
+          <AlertTitle>Espace personnel - prive et non partageable</AlertTitle>
+          <AlertDescription className="mt-2">
+            <p className="mb-2">
+              Cet espace est votre espace personnel prive. Il ne peut pas etre partage avec d&apos;autres utilisateurs.
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+              <li>Les notes de cet espace ne sont visibles que par vous</li>
+              <li>Aucun autre utilisateur ne peut y acceder, meme les administrateurs</li>
+              <li>Cet espace ne peut pas etre supprime</li>
+              <li>Utilisez les workspaces d&apos;equipe pour collaborer</li>
+            </ul>
+          </AlertDescription>
+        </Alert>
+
+        {/* Owner info (yourself) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Crown className="h-4 w-4 text-amber-500" />
+              Propriétaire unique
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <Avatar className="h-12 w-12">
+                {workspace.owner.avatar && (
+                  <AvatarImage
+                    src={workspace.owner.avatar}
+                    alt={workspace.owner.name || workspace.owner.email}
+                  />
+                )}
+                <AvatarFallback>
+                  {getInitials(workspace.owner.name, workspace.owner.email)}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">
+                  {workspace.owner.name || workspace.owner.email}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {workspace.owner.email}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Back link */}
@@ -125,7 +210,7 @@ export function WorkspacePermissionsClient({
           Permissions: {workspace.name}
         </h1>
         <p className="text-muted-foreground mt-1">
-          Gerez les membres et leurs roles dans ce workspace.
+          Gérez les membres et leurs rôles dans ce workspace.
         </p>
       </div>
 
@@ -134,7 +219,7 @@ export function WorkspacePermissionsClient({
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Crown className="h-4 w-4 text-amber-500" />
-            Proprietaire
+            Propriétaire
           </CardTitle>
           <CardDescription>
             Le proprietaire a tous les droits sur ce workspace.
