@@ -31,6 +31,9 @@ import type { Workspace, UserWorkspaceRole } from "../types";
  * - User is the workspace owner
  * - User is a member of the workspace (any role)
  *
+ * CRITICAL (Story 8.5): Personal workspaces are ONLY accessible by their owner.
+ * Even admins cannot access another user's personal workspace.
+ *
  * @param userId - ID of the user
  * @param workspaceId - ID of the workspace
  * @returns true if user can access the workspace
@@ -43,6 +46,7 @@ export async function canAccessWorkspace(
     where: { id: workspaceId },
     select: {
       ownerId: true,
+      isPersonal: true,
       members: {
         where: { userId },
         select: { id: true },
@@ -52,6 +56,11 @@ export async function canAccessWorkspace(
 
   if (!workspace) {
     return false;
+  }
+
+  // CRITICAL: Personal workspace is ONLY accessible by owner (Story 8.5: AC #2, #4)
+  if (workspace.isPersonal) {
+    return workspace.ownerId === userId;
   }
 
   // Owner always has access
@@ -171,7 +180,10 @@ export async function canDeleteNotes(
  *
  * Returns workspaces where user is:
  * - The owner
- * - A member (any role)
+ * - A member (any role) - but NOT personal workspaces of others
+ *
+ * CRITICAL (Story 8.5): Personal workspaces of other users are NEVER included,
+ * even if the user somehow has a membership (which shouldn't happen).
  *
  * Ordered by: personal first, then alphabetically by name
  *
@@ -182,8 +194,13 @@ export async function getAccessibleWorkspaces(userId: string): Promise<Workspace
   const workspaces = await prisma.workspace.findMany({
     where: {
       OR: [
+        // User's own workspaces (including personal)
         { ownerId: userId },
-        { members: { some: { userId } } },
+        // Workspaces where user is a member (excluding personal workspaces - Story 8.5)
+        {
+          members: { some: { userId } },
+          isPersonal: false,
+        },
       ],
     },
     select: {
@@ -256,6 +273,8 @@ export async function getUserRoleInWorkspace(
  *
  * Useful for UI to show role badges next to workspace names.
  *
+ * CRITICAL (Story 8.5): Personal workspaces of other users are NEVER included.
+ *
  * @param userId - ID of the user
  * @returns Array of workspaces with user's role
  */
@@ -277,11 +296,12 @@ export async function getAccessibleWorkspacesWithRole(
     },
   });
 
-  // Get workspaces where user is a member
+  // Get workspaces where user is a member (excluding personal workspaces - Story 8.5)
   const memberWorkspaces = await prisma.workspace.findMany({
     where: {
       members: { some: { userId } },
       NOT: { ownerId: userId }, // Exclude owned workspaces (already in ownedWorkspaces)
+      isPersonal: false, // CRITICAL: Never include personal workspaces of others
     },
     select: {
       id: true,
@@ -586,4 +606,70 @@ export async function getAccessibleFolderIds(
   );
 
   return accessibleFolders.map((f) => f.id);
+}
+
+/**
+ * Writable workspace result type
+ * @see Story 8.6: Partage vers Espace Équipe
+ */
+export interface WritableWorkspace {
+  id: string;
+  name: string;
+  icon: string;
+  role: UserWorkspaceRole;
+}
+
+/**
+ * Get workspaces where user can create/edit notes (non-personal only)
+ *
+ * Returns workspaces where user is:
+ * - Owner (team workspaces only)
+ * - Member with ADMIN or EDITOR role
+ *
+ * Excludes personal workspaces since sharing to personal is not allowed.
+ *
+ * @param userId - ID of the user
+ * @returns Array of writable workspaces with user's role
+ * @see Story 8.6: Partage vers Espace Équipe
+ */
+export async function getWritableWorkspaces(userId: string): Promise<WritableWorkspace[]> {
+  const workspaces = await prisma.workspace.findMany({
+    where: {
+      isPersonal: false, // Exclude personal workspaces
+      OR: [
+        { ownerId: userId }, // Owner
+        {
+          members: {
+            some: {
+              userId,
+              role: { in: ["ADMIN", "EDITOR"] }, // Has write role
+            },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      icon: true,
+      ownerId: true,
+      members: {
+        where: { userId },
+        select: { role: true },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  logger.info(
+    { userId, count: workspaces.length },
+    "Writable workspaces fetched for user"
+  );
+
+  return workspaces.map((ws) => ({
+    id: ws.id,
+    name: ws.name,
+    icon: ws.icon,
+    role: (ws.ownerId === userId ? "OWNER" : ws.members[0]?.role || "EDITOR") as UserWorkspaceRole,
+  }));
 }

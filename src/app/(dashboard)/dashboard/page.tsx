@@ -270,6 +270,7 @@ export default function DashboardPage() {
         isTogglingFavorite={isTogglingFavorite}
         enableMoveToFolder={true}
         enableDragAndDrop={true}
+        enableShareToWorkspace={true}
       />
 
       {/* Delete confirmation dialog */}

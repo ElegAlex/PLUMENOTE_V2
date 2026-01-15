@@ -8,13 +8,14 @@
  *
  * @see Story 3.3: Liste des Notes
  * @see Story 5.3: Déplacement de Notes dans les Dossiers
+ * @see Story 8.6: Partage vers Espace Équipe
  */
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
-import { MoreHorizontal, Trash2, Edit, Star, FolderInput } from "lucide-react";
+import { MoreHorizontal, Trash2, Edit, Star, FolderInput, Share2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TagChip } from "./TagChip";
@@ -37,6 +38,8 @@ export interface NoteCardProps {
   onToggleFavorite?: (id: string) => void;
   /** Callback when "Move to folder" is clicked */
   onMoveToFolder?: (id: string) => void;
+  /** Callback when "Share to workspace" is clicked (only for personal notes) */
+  onShareToWorkspace?: (id: string) => void;
   /** Whether delete is in progress */
   isDeleting?: boolean;
   /** Whether favorite toggle is in progress */
@@ -94,6 +97,7 @@ export function NoteCard({
   onDelete,
   onToggleFavorite,
   onMoveToFolder,
+  onShareToWorkspace,
   isDeleting = false,
   isTogglingFavorite = false,
   draggable: isDraggable = false,
@@ -200,7 +204,16 @@ export function NoteCard({
                   Déplacer vers...
                 </DropdownMenuItem>
               )}
-              {(onToggleFavorite || onMoveToFolder) && onDelete && (
+              {/* Share to workspace - only for personal notes (workspaceId === null) */}
+              {onShareToWorkspace && note.workspaceId === null && (
+                <DropdownMenuItem
+                  onClick={() => onShareToWorkspace(note.id)}
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Partager vers...
+                </DropdownMenuItem>
+              )}
+              {(onToggleFavorite || onMoveToFolder || (onShareToWorkspace && note.workspaceId === null)) && onDelete && (
                 <DropdownMenuSeparator />
               )}
               {onDelete && (

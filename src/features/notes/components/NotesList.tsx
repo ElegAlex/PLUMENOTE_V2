@@ -5,9 +5,11 @@
  *
  * Displays a grid of notes with loading and empty states.
  * Supports moving notes to folders via dialog and toast notifications.
+ * Supports sharing personal notes to team workspaces.
  *
  * @see Story 3.3: Liste des Notes
  * @see Story 5.3: Déplacement de Notes dans les Dossiers
+ * @see Story 8.6: Partage vers Espace Équipe
  */
 
 import { useState, useCallback } from "react";
@@ -17,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { NoteCard } from "./NoteCard";
 import { MoveToFolderDialog } from "./MoveToFolderDialog";
+import { ShareToWorkspaceDialog } from "./ShareToWorkspaceDialog";
 import { useMoveNote } from "../hooks/useMoveNote";
 import { useFolders } from "../hooks/useFolders";
 import { findFolderNameById } from "../utils/folderUtils";
@@ -50,6 +53,8 @@ export interface NotesListProps {
   enableMoveToFolder?: boolean;
   /** Whether to enable drag-and-drop for notes */
   enableDragAndDrop?: boolean;
+  /** Whether to enable sharing personal notes to team workspaces */
+  enableShareToWorkspace?: boolean;
   /** Additional CSS classes */
   className?: string;
 }
@@ -164,12 +169,18 @@ export function NotesList({
   isTogglingFavorite,
   enableMoveToFolder = false,
   enableDragAndDrop = false,
+  enableShareToWorkspace = false,
   className,
 }: NotesListProps) {
   // State for move dialog
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveNoteId, setMoveNoteId] = useState<string | null>(null);
   const [moveNoteCurrentFolderId, setMoveNoteCurrentFolderId] = useState<string | null>(null);
+
+  // State for share dialog (Story 8.6)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareNoteId, setShareNoteId] = useState<string | null>(null);
+  const [shareNoteTitle, setShareNoteTitle] = useState<string>("");
 
   // Hooks for moving notes
   const { moveNoteAsync } = useMoveNote();
@@ -215,6 +226,16 @@ export function NotesList({
     }
   }, [notes, folders, moveNoteAsync]);
 
+  // Open share dialog for a note (Story 8.6)
+  const handleShareToWorkspace = useCallback((noteId: string) => {
+    const note = notes.find(n => n.id === noteId);
+    if (note) {
+      setShareNoteId(noteId);
+      setShareNoteTitle(note.title || "Sans titre");
+      setShareDialogOpen(true);
+    }
+  }, [notes]);
+
   if (isLoading) {
     return <NotesListSkeleton />;
   }
@@ -246,6 +267,7 @@ export function NotesList({
             onDelete={onDelete}
             onToggleFavorite={onToggleFavorite}
             onMoveToFolder={enableMoveToFolder ? handleMoveToFolder : undefined}
+            onShareToWorkspace={enableShareToWorkspace ? handleShareToWorkspace : undefined}
             isDeleting={deletingId === note.id}
             isTogglingFavorite={isTogglingFavorite}
             draggable={enableDragAndDrop}
@@ -261,6 +283,16 @@ export function NotesList({
           noteId={moveNoteId}
           currentFolderId={moveNoteCurrentFolderId}
           onSelect={handleMoveSelect}
+        />
+      )}
+
+      {/* Share to workspace dialog (Story 8.6) */}
+      {enableShareToWorkspace && shareNoteId && (
+        <ShareToWorkspaceDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          noteId={shareNoteId}
+          noteTitle={shareNoteTitle}
         />
       )}
     </>
