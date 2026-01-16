@@ -468,6 +468,7 @@ export default function NotePage({ params }: NotePageProps) {
             onTitleChange={handleTitleChange}
             saveStatus={displaySaveStatus}
             isNewNote={isNewNote}
+            viewCount={note.viewCount}
           />
         </div>
         {/* Presence Indicator (Story 4-5) */}

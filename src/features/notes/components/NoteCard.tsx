@@ -3,12 +3,13 @@
 /**
  * NoteCard Component
  *
- * Displays a single note in a card format with title, preview, and actions.
+ * Displays a single note in a card format with title, preview, view count, and actions.
  * Supports drag-and-drop for moving to folders.
  *
  * @see Story 3.3: Liste des Notes
  * @see Story 5.3: Déplacement de Notes dans les Dossiers
  * @see Story 8.6: Partage vers Espace Équipe
+ * @see Story 10.2: Affichage du Nombre de Vues (FR43)
  */
 
 import { useState, useCallback } from "react";
@@ -27,6 +28,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { ViewCount } from "@/features/analytics/components/ViewCount";
 import type { Note } from "../types";
 
 export interface NoteCardProps {
@@ -261,10 +263,11 @@ export function NoteCard({
           </div>
         )}
 
-        {/* Metadata */}
-        <p className="mt-3 text-xs text-muted-foreground">
-          Modifié {formatDate(note.updatedAt)}
-        </p>
+        {/* Metadata with view count (Story 10.2) */}
+        <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+          <ViewCount count={note.viewCount} variant="compact" showTooltip={false} />
+          <span>Modifié {formatDate(note.updatedAt)}</span>
+        </div>
       </CardContent>
     </Card>
   );

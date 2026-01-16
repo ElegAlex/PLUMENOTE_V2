@@ -4,6 +4,7 @@
  * Tests display, actions, and accessibility features.
  *
  * @see Story 3.3: Liste des Notes
+ * @see Story 10.2: Affichage du Nombre de Vues
  */
 
 import { describe, it, expect, vi } from "vitest";
@@ -33,9 +34,16 @@ const mockNote: Note = {
   id: "note-123",
   title: "Test Note Title",
   content: "<p>This is the note content with some text.</p>",
-  userId: "user-1",
+  folderId: null,
+  workspaceId: null,
+  isFavorite: false,
+  sortOrder: 0,
   createdAt: new Date("2024-01-15T10:00:00Z"),
   updatedAt: new Date("2024-01-15T12:00:00Z"),
+  createdById: "user-1",
+  viewCount: 42,
+  lastViewedAt: new Date("2024-01-15T11:00:00Z"),
+  lastModifiedById: "user-1",
 };
 
 const mockNoteWithTags: Note = {
@@ -506,6 +514,47 @@ describe("NoteCard", () => {
       await user.click(favoriteMenuItem);
 
       expect(onToggleFavorite).toHaveBeenCalledWith("note-123");
+    });
+  });
+
+  describe("view count display (Story 10.2)", () => {
+    it("should display view count in compact format", () => {
+      render(<NoteCard note={mockNote} />);
+
+      // mockNote has viewCount: 42
+      expect(screen.getByText("42")).toBeInTheDocument();
+    });
+
+    it("should format large view counts with k suffix", () => {
+      const noteWithManyViews = { ...mockNote, viewCount: 1500 };
+      render(<NoteCard note={noteWithManyViews} />);
+
+      expect(screen.getByText("1.5k")).toBeInTheDocument();
+    });
+
+    it("should display view count of 0", () => {
+      const noteWithZeroViews = { ...mockNote, viewCount: 0 };
+      render(<NoteCard note={noteWithZeroViews} />);
+
+      expect(screen.getByText("0")).toBeInTheDocument();
+    });
+
+    it("should not show tooltip in compact variant (NoteCard)", () => {
+      render(<NoteCard note={mockNote} />);
+
+      // ViewCount in compact mode with showTooltip={false} should not have tooltip
+      // We verify by checking that the tooltip content text is not present
+      expect(
+        screen.queryByText("Vues uniques des 30 derniers jours")
+      ).not.toBeInTheDocument();
+    });
+
+    it("should render Eye icon for view count", () => {
+      const { container } = render(<NoteCard note={mockNote} />);
+
+      // Look for the Eye icon SVG (lucide-react adds lucide-eye class)
+      const eyeIcon = container.querySelector("svg.lucide-eye");
+      expect(eyeIcon).toBeInTheDocument();
     });
   });
 });

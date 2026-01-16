@@ -3,11 +3,12 @@
 /**
  * Note Header Component
  *
- * Displays the note title (editable) and save status indicator.
+ * Displays the note title (editable), view count, and save status indicator.
  * Handles auto-focus for new notes.
  *
  * @see Story 3.3: Creation d'une Nouvelle Note
  * @see Story 3.4: Sauvegarde Automatique des Notes
+ * @see Story 10.2: Affichage du Nombre de Vues (FR43)
  * @see AC #3: Auto-focus sur le titre
  * @see AC #5: Indicateur "Sauvegarde"
  * @see AC #2 (3.4): Indicateur "Hors ligne"
@@ -16,6 +17,7 @@
 import { useRef, useEffect } from "react";
 import { Check, Loader2, AlertCircle, Cloud, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ViewCount } from "@/features/analytics/components/ViewCount";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error" | "offline";
 
@@ -30,6 +32,8 @@ export interface NoteHeaderProps {
   isNewNote?: boolean;
   /** Placeholder text for empty title */
   placeholder?: string;
+  /** View count for the note (Story 10.2) */
+  viewCount?: number;
   /** Additional CSS classes */
   className?: string;
 }
@@ -88,7 +92,7 @@ function SaveStatusIndicator({ status }: { status: SaveStatus }) {
 }
 
 /**
- * Note header with editable title and save status
+ * Note header with editable title, view count, and save status
  */
 export function NoteHeader({
   title,
@@ -96,6 +100,7 @@ export function NoteHeader({
   saveStatus,
   isNewNote = false,
   placeholder = "Sans titre",
+  viewCount,
   className,
 }: NoteHeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -121,6 +126,9 @@ export function NoteHeader({
         className="flex-1 border-none bg-transparent text-3xl font-bold outline-none placeholder:text-muted-foreground focus:ring-0"
         aria-label="Titre de la note"
       />
+
+      {/* View count indicator (Story 10.2) */}
+      {viewCount !== undefined && <ViewCount count={viewCount} />}
 
       {/* Save status indicator */}
       <SaveStatusIndicator status={saveStatus} />

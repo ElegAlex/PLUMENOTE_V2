@@ -117,4 +117,39 @@ describe("NoteHeader", () => {
       expect(status).toHaveAttribute("aria-live", "polite");
     });
   });
+
+  describe("View Count (Story 10.2)", () => {
+    it("does not show view count when viewCount is undefined", () => {
+      render(<NoteHeader {...defaultProps} />);
+
+      expect(screen.queryByText(/vues?$/i)).not.toBeInTheDocument();
+    });
+
+    it("shows view count when viewCount is provided", () => {
+      render(<NoteHeader {...defaultProps} viewCount={42} />);
+
+      expect(screen.getByText("42")).toBeInTheDocument();
+      expect(screen.getByText("vues")).toBeInTheDocument();
+    });
+
+    it("shows singular 'vue' for viewCount of 1", () => {
+      render(<NoteHeader {...defaultProps} viewCount={1} />);
+
+      expect(screen.getByText("1")).toBeInTheDocument();
+      expect(screen.getByText("vue")).toBeInTheDocument();
+    });
+
+    it("shows view count of 0", () => {
+      render(<NoteHeader {...defaultProps} viewCount={0} />);
+
+      expect(screen.getByText("0")).toBeInTheDocument();
+      expect(screen.getByText("vue")).toBeInTheDocument();
+    });
+
+    it("formats large view counts", () => {
+      render(<NoteHeader {...defaultProps} viewCount={1500} />);
+
+      expect(screen.getByText("1.5k")).toBeInTheDocument();
+    });
+  });
 });

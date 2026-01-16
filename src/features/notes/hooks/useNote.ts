@@ -102,11 +102,13 @@ export function useNote(id: string, options: UseNoteOptions = {}) {
   const prevErrorRef = useRef<Error | null>(null);
 
   // Query for fetching note
+  // Note: refetchOnWindowFocus enabled to refresh viewCount when user returns to tab (Story 10.2 AC #4)
   const query = useQuery({
     queryKey: noteKeys.detail(id),
     queryFn: () => fetchNote(id),
     enabled: enabled && !!id,
     staleTime: 30 * 1000, // 30 seconds
+    refetchOnWindowFocus: true, // Override global setting for note details
   });
 
   // Call onSuccess only when data changes (not on every render)
