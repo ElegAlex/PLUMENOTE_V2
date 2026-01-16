@@ -2,8 +2,11 @@
  * Tests for CommentItem Component
  *
  * @see Story 9.5: Ajout de Commentaires en Marge
+ * @see Story 9.6: Réponses et Résolution de Commentaires
  * @see AC: #6 - Afficher auteur, date relative, contenu
  * @see AC: #8 - Modifier ou supprimer son commentaire
+ * @see AC 9.6 #5 - Affichage "Résolu"
+ * @see AC 9.6 #4, #7 - Boutons Résoudre/Rouvrir
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -326,6 +329,136 @@ describe("CommentItem", () => {
       const article = screen.getByRole("article");
       expect(article).toHaveAttribute("aria-label");
       expect(article.getAttribute("aria-label")).toContain("Jean Dupont");
+    });
+  });
+
+  describe("resolved state (Story 9.6)", () => {
+    it("should display resolved badge when comment is resolved", () => {
+      render(
+        <CommentItem comment={createMockComment({ resolved: true })} />
+      );
+
+      expect(screen.getByText("Résolu")).toBeInTheDocument();
+    });
+
+    it("should not display resolved badge when comment is not resolved", () => {
+      render(
+        <CommentItem comment={createMockComment({ resolved: false })} />
+      );
+
+      expect(screen.queryByText("Résolu")).not.toBeInTheDocument();
+    });
+
+    it("should apply opacity styling when comment is resolved", () => {
+      render(
+        <CommentItem comment={createMockComment({ resolved: true })} />
+      );
+
+      const article = screen.getByRole("article");
+      expect(article).toHaveClass("opacity-60");
+      expect(article).toHaveClass("bg-muted/30");
+    });
+
+    it("should include resolved status in aria-label", () => {
+      render(
+        <CommentItem comment={createMockComment({ resolved: true })} />
+      );
+
+      const article = screen.getByRole("article");
+      expect(article.getAttribute("aria-label")).toContain("résolu");
+    });
+  });
+
+  describe("resolve/unresolve actions (Story 9.6)", () => {
+    it("should show actions menu for users who can resolve", async () => {
+      render(
+        <CommentItem
+          comment={createMockComment()}
+          isAuthor={false}
+          canResolve={true}
+        />
+      );
+
+      expect(screen.getByRole("button", { name: /actions/i })).toBeInTheDocument();
+    });
+
+    it("should show Résoudre option for unresolved comments", async () => {
+      const user = userEvent.setup();
+      render(
+        <CommentItem
+          comment={createMockComment({ resolved: false })}
+          canResolve={true}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: /actions/i }));
+
+      expect(screen.getByRole("menuitem", { name: /résoudre/i })).toBeInTheDocument();
+    });
+
+    it("should show Rouvrir option for resolved comments", async () => {
+      const user = userEvent.setup();
+      render(
+        <CommentItem
+          comment={createMockComment({ resolved: true })}
+          canResolve={true}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: /actions/i }));
+
+      expect(screen.getByRole("menuitem", { name: /rouvrir/i })).toBeInTheDocument();
+    });
+
+    it("should call onResolve when Résoudre is clicked", async () => {
+      const user = userEvent.setup();
+      const onResolve = vi.fn();
+      render(
+        <CommentItem
+          comment={createMockComment({ resolved: false })}
+          canResolve={true}
+          onResolve={onResolve}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: /actions/i }));
+      await user.click(screen.getByRole("menuitem", { name: /résoudre/i }));
+
+      expect(onResolve).toHaveBeenCalledWith("comment-1");
+    });
+
+    it("should call onUnresolve when Rouvrir is clicked", async () => {
+      const user = userEvent.setup();
+      const onUnresolve = vi.fn();
+      render(
+        <CommentItem
+          comment={createMockComment({ resolved: true })}
+          canResolve={true}
+          onUnresolve={onUnresolve}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: /actions/i }));
+      await user.click(screen.getByRole("menuitem", { name: /rouvrir/i }));
+
+      expect(onUnresolve).toHaveBeenCalledWith("comment-1");
+    });
+
+    it("should show separator between author actions and resolve action", async () => {
+      const user = userEvent.setup();
+      render(
+        <CommentItem
+          comment={createMockComment()}
+          isAuthor={true}
+          canResolve={true}
+        />
+      );
+
+      await user.click(screen.getByRole("button", { name: /actions/i }));
+
+      // Both edit/delete and resolve should be visible
+      expect(screen.getByRole("menuitem", { name: /modifier/i })).toBeInTheDocument();
+      expect(screen.getByRole("menuitem", { name: /résoudre/i })).toBeInTheDocument();
     });
   });
 });

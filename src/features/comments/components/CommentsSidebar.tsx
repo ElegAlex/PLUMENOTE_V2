@@ -4,16 +4,18 @@
  * CommentsSidebar Component
  *
  * Side panel for managing comments on a note.
- * Combines CommentForm and CommentsList.
+ * Combines CommentForm and CommentsList with threading and filtering.
  *
  * @see Story 9.5: Ajout de Commentaires en Marge
+ * @see Story 9.6: Réponses et Résolution de Commentaires
  * @see AC: #1 - Panneau latéral pour les commentaires
  * @see AC: #4 - Scroll vers le commentaire sélectionné
  * @see AC: #5 - Liste des commentaires
+ * @see AC 9.6 #6 - Filtre "Masquer les résolus"
  */
 
-import { useEffect } from "react";
-import { MessageSquare, X } from "lucide-react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { MessageSquare, X, EyeOff, Eye } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -22,13 +24,20 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useComments } from "../hooks/useComments";
 import { useCreateComment } from "../hooks/useCreateComment";
 import { useUpdateComment } from "../hooks/useUpdateComment";
 import { useDeleteComment } from "../hooks/useDeleteComment";
+import { useReplyComment } from "../hooks/useReplyComment";
+import { useResolveComment } from "../hooks/useResolveComment";
 import { CommentForm } from "./CommentForm";
 import { CommentsList } from "./CommentsList";
+import type { Comment } from "../types";
+
+/** Local storage key for hide resolved preference */
+const HIDE_RESOLVED_KEY = "plumenote-comments-hide-resolved";
 
 export interface CommentSelection {
   /** Selected text */
@@ -137,12 +146,48 @@ export function CommentsSidebar({
     },
   });
 
+  // Reply comment mutation
+  const { replyToComment, isReplying } = useReplyComment(noteId, {
+    onSuccess: () => {
+      setActiveReplyId(null);
+      refetch();
+    },
+  });
+
+  // Resolve comment mutation
+  const { resolveComment, unresolveComment, isResolving } = useResolveComment({
+    noteId,
+    onSuccess: () => {
+      refetch();
+    },
+  });
+
+  // Hide resolved filter state (persisted in localStorage)
+  const [hideResolved, setHideResolved] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(HIDE_RESOLVED_KEY) === "true";
+  });
+
+  // Active reply state
+  const [activeReplyId, setActiveReplyId] = useState<string | null>(null);
+
+  // Persist hide resolved preference
+  useEffect(() => {
+    localStorage.setItem(HIDE_RESOLVED_KEY, String(hideResolved));
+  }, [hideResolved]);
+
   // Clear selection when sidebar closes
   useEffect(() => {
     if (!open && selection) {
       onSelectionClear?.();
     }
   }, [open, selection, onSelectionClear]);
+
+  // Filter comments based on hideResolved
+  const filteredComments = useMemo(() => {
+    if (!hideResolved) return comments;
+    return comments.filter((c) => !c.resolved);
+  }, [comments, hideResolved]);
 
   const handleFormSubmit = (data: {
     content: string;
@@ -189,6 +234,26 @@ export function CommentsSidebar({
           <SheetDescription className="sr-only">
             Panneau des commentaires de la note
           </SheetDescription>
+          {/* Hide resolved toggle - AC 9.6 #6 */}
+          <div className="flex items-center justify-between pt-2">
+            <Label
+              htmlFor="hide-resolved"
+              className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer"
+            >
+              {hideResolved ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+              Masquer les résolus
+            </Label>
+            <Switch
+              id="hide-resolved"
+              checked={hideResolved}
+              onCheckedChange={setHideResolved}
+              aria-label="Masquer les commentaires résolus"
+            />
+          </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto">
@@ -209,13 +274,21 @@ export function CommentsSidebar({
           {/* Comments List */}
           <div className="p-4">
             <CommentsList
-              comments={comments}
+              comments={filteredComments}
               currentUserId={currentUserId}
               selectedCommentId={selectedCommentId}
               isLoading={isLoading}
+              canResolve={true}
+              activeReplyId={activeReplyId}
+              isReplying={isReplying}
               onCommentSelect={onCommentSelect}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onReply={setActiveReplyId}
+              onReplySubmit={(parent, content) => replyToComment({ parentComment: parent, content })}
+              onReplyCancel={() => setActiveReplyId(null)}
+              onResolve={resolveComment}
+              onUnresolve={unresolveComment}
             />
           </div>
         </div>

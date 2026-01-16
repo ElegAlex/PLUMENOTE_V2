@@ -118,8 +118,9 @@ describe("CommentsList", () => {
       );
 
       // The selected comment should have bg-accent class
+      // With threading, articles[0] is CommentThread, articles[1] is CommentItem
       const articles = screen.getAllByRole("article");
-      expect(articles[0]).toHaveClass("bg-accent");
+      expect(articles[1]).toHaveClass("bg-accent");
     });
 
     it("should call onCommentSelect when comment is clicked", () => {
@@ -133,7 +134,9 @@ describe("CommentsList", () => {
         />
       );
 
-      fireEvent.click(screen.getByRole("article"));
+      // With threading, articles[0] is CommentThread, articles[1] is CommentItem
+      const articles = screen.getAllByRole("article");
+      fireEvent.click(articles[1]);
 
       expect(onCommentSelect).toHaveBeenCalledWith("c1");
     });

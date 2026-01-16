@@ -4,23 +4,28 @@
  * CommentItem Component
  *
  * Displays a single comment with author info, date, content, and actions.
- * Supports inline editing for the author.
+ * Supports inline editing for the author, resolved state, and resolve/unresolve actions.
  *
  * @see Story 9.5: Ajout de Commentaires en Marge
+ * @see Story 9.6: Réponses et Résolution de Commentaires
  * @see AC: #6 - Afficher auteur, date relative, contenu
  * @see AC: #8 - Modifier ou supprimer son commentaire
+ * @see AC 9.6 #5 - Affichage "Résolu" (badge, opacity)
+ * @see AC 9.6 #4, #7 - Boutons Résoudre/Rouvrir
  */
 
 import { useState, useRef, useEffect } from "react";
 import { formatDistanceToNow, format } from "date-fns";
 import { fr } from "date-fns/locale";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, CheckCircle2, Undo2 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -46,12 +51,18 @@ export interface CommentItemProps {
   isSelected?: boolean;
   /** Whether edit mode is active */
   isEditing?: boolean;
+  /** Whether the user can resolve this comment (author or editor) */
+  canResolve?: boolean;
   /** Callback when comment is clicked */
   onSelect?: () => void;
   /** Callback when edit is requested */
   onEdit?: (commentId: string, newContent: string) => void;
   /** Callback when delete is requested */
   onDelete?: (commentId: string) => void;
+  /** Callback when resolve is requested */
+  onResolve?: (commentId: string) => void;
+  /** Callback when unresolve is requested */
+  onUnresolve?: (commentId: string) => void;
 }
 
 /**
@@ -105,9 +116,12 @@ export function CommentItem({
   isAuthor = false,
   isSelected = false,
   isEditing: externalIsEditing,
+  canResolve = false,
   onSelect,
   onEdit,
   onDelete,
+  onResolve,
+  onUnresolve,
 }: CommentItemProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
@@ -171,19 +185,31 @@ export function CommentItem({
     }
   };
 
+  const handleResolve = () => {
+    if (comment.resolved) {
+      onUnresolve?.(comment.id);
+    } else {
+      onResolve?.(comment.id);
+    }
+  };
+
+  // Show actions menu if author or can resolve
+  const showActionsMenu = isAuthor || canResolve;
+
   return (
     <>
       <div
         className={cn(
           "group rounded-lg p-3 transition-colors",
           isSelected && "bg-accent",
-          !isEditing && "hover:bg-muted/50 cursor-pointer"
+          !isEditing && "hover:bg-muted/50 cursor-pointer",
+          comment.resolved && "opacity-60 bg-muted/30"
         )}
         onClick={!isEditing ? onSelect : undefined}
         role="article"
-        aria-label={`Commentaire de ${authorName}, ${fullDate}`}
+        aria-label={`Commentaire de ${authorName}, ${fullDate}${comment.resolved ? ", résolu" : ""}`}
       >
-        {/* Header: Avatar + Name + Date + Actions */}
+        {/* Header: Avatar + Name + Date + Resolved Badge + Actions */}
         <div className="flex items-start gap-3">
           <Avatar className="h-8 w-8 shrink-0">
             {authorAvatar && <AvatarImage src={authorAvatar} alt={authorName} />}
@@ -191,7 +217,7 @@ export function CommentItem({
           </Avatar>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-medium truncate">{authorName}</span>
               <span
                 className="text-xs text-muted-foreground"
@@ -199,6 +225,16 @@ export function CommentItem({
               >
                 {relativeDate}
               </span>
+              {comment.resolved && (
+                <Badge
+                  variant="secondary"
+                  className="h-5 text-xs gap-1"
+                  aria-label="Commentaire résolu"
+                >
+                  <CheckCircle2 className="h-3 w-3" />
+                  Résolu
+                </Badge>
+              )}
             </div>
 
             {/* Content or Edit Mode */}
@@ -239,8 +275,8 @@ export function CommentItem({
             )}
           </div>
 
-          {/* Actions Menu - only visible for author */}
-          {isAuthor && !isEditing && (
+          {/* Actions Menu - visible for author or users who can resolve */}
+          {showActionsMenu && !isEditing && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -254,17 +290,42 @@ export function CommentItem({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleStartEdit}>
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Modifier
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Supprimer
-                </DropdownMenuItem>
+                {/* Author-only actions */}
+                {isAuthor && (
+                  <>
+                    <DropdownMenuItem onClick={handleStartEdit}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Modifier
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => setShowDeleteDialog(true)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Supprimer
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {/* Separator if both author actions and resolve action */}
+                {isAuthor && canResolve && <DropdownMenuSeparator />}
+
+                {/* Resolve/Unresolve action - for author or editor */}
+                {canResolve && (
+                  <DropdownMenuItem onClick={handleResolve}>
+                    {comment.resolved ? (
+                      <>
+                        <Undo2 className="h-4 w-4 mr-2" />
+                        Rouvrir
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        Résoudre
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}

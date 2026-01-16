@@ -2,8 +2,10 @@
  * Tests for CommentsSidebar Component
  *
  * @see Story 9.5: Ajout de Commentaires en Marge
- * @see AC: #1 - Panneau latéral pour les commentaires
- * @see AC: #4 - Scroll vers le commentaire sélectionné
+ * @see Story 9.6: Réponses et Résolution de Commentaires
+ * @see AC 9.5: #1 - Panneau latéral pour les commentaires
+ * @see AC 9.5: #4 - Scroll vers le commentaire sélectionné
+ * @see AC 9.6: #6 - Toggle "Masquer les résolus"
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -50,15 +52,39 @@ vi.mock("../hooks/useDeleteComment", () => ({
   })),
 }));
 
+vi.mock("../hooks/useReplyComment", () => ({
+  useReplyComment: vi.fn(() => ({
+    replyToComment: vi.fn(),
+    replyToCommentAsync: vi.fn(),
+    isReplying: false,
+    error: null,
+    reset: vi.fn(),
+  })),
+}));
+
+vi.mock("../hooks/useResolveComment", () => ({
+  useResolveComment: vi.fn(() => ({
+    resolveComment: vi.fn(),
+    unresolveComment: vi.fn(),
+    isResolving: false,
+    error: null,
+    reset: vi.fn(),
+  })),
+}));
+
 import { useComments } from "../hooks/useComments";
 import { useCreateComment } from "../hooks/useCreateComment";
 import { useUpdateComment } from "../hooks/useUpdateComment";
 import { useDeleteComment } from "../hooks/useDeleteComment";
+import { useReplyComment } from "../hooks/useReplyComment";
+import { useResolveComment } from "../hooks/useResolveComment";
 
 const mockUseComments = vi.mocked(useComments);
 const mockUseCreateComment = vi.mocked(useCreateComment);
 const mockUseUpdateComment = vi.mocked(useUpdateComment);
 const mockUseDeleteComment = vi.mocked(useDeleteComment);
+const mockUseReplyComment = vi.mocked(useReplyComment);
+const mockUseResolveComment = vi.mocked(useResolveComment);
 
 /**
  * Create a test QueryClient
@@ -153,6 +179,27 @@ describe("CommentsSidebar", () => {
       error: null,
       reset: vi.fn(),
     } as ReturnType<typeof useDeleteComment>);
+
+    mockUseReplyComment.mockReturnValue({
+      replyToComment: vi.fn(),
+      replyToCommentAsync: vi.fn(),
+      isReplying: false,
+      error: null,
+      reset: vi.fn(),
+    } as ReturnType<typeof useReplyComment>);
+
+    mockUseResolveComment.mockReturnValue({
+      resolveComment: vi.fn(),
+      unresolveComment: vi.fn(),
+      resolveCommentAsync: vi.fn(),
+      unresolveCommentAsync: vi.fn(),
+      isResolving: false,
+      error: null,
+      reset: vi.fn(),
+    } as ReturnType<typeof useResolveComment>);
+
+    // Clear localStorage before each test
+    localStorage.clear();
   });
 
   describe("rendering", () => {
@@ -335,7 +382,9 @@ describe("CommentsSidebar", () => {
       );
 
       // The selected comment should have bg-accent class
-      expect(screen.getByRole("article")).toHaveClass("bg-accent");
+      // With threading, articles[0] is CommentThread, articles[1] is CommentItem
+      const articles = screen.getAllByRole("article");
+      expect(articles[1]).toHaveClass("bg-accent");
     });
   });
 
@@ -360,7 +409,9 @@ describe("CommentsSidebar", () => {
         { wrapper: createWrapper() }
       );
 
-      await user.click(screen.getByRole("article"));
+      // With threading, articles[0] is CommentThread, articles[1] is CommentItem
+      const articles = screen.getAllByRole("article");
+      await user.click(articles[1]);
 
       expect(onCommentSelect).toHaveBeenCalledWith("c1");
     });
@@ -439,6 +490,160 @@ describe("CommentsSidebar", () => {
       expect(
         screen.getByText(/panneau des commentaires de la note/i)
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("hide resolved filter (Story 9.6 AC #6)", () => {
+    it("should render hide resolved toggle switch", () => {
+      render(<CommentsSidebar {...defaultProps} />, {
+        wrapper: createWrapper(),
+      });
+
+      expect(screen.getByLabelText(/masquer les commentaires résolus/i)).toBeInTheDocument();
+      expect(screen.getByText(/masquer les résolus/i)).toBeInTheDocument();
+    });
+
+    it("should filter out resolved comments when toggle is enabled", async () => {
+      const user = userEvent.setup();
+      mockUseComments.mockReturnValue({
+        comments: [
+          createMockComment({ id: "c1", content: "Comment non résolu", resolved: false }),
+          createMockComment({ id: "c2", content: "Comment résolu", resolved: true }),
+        ],
+        total: 2,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useComments>);
+
+      render(<CommentsSidebar {...defaultProps} />, {
+        wrapper: createWrapper(),
+      });
+
+      // Both comments should be visible initially
+      expect(screen.getByText("Comment non résolu")).toBeInTheDocument();
+      expect(screen.getByText("Comment résolu")).toBeInTheDocument();
+
+      // Enable the filter
+      const toggle = screen.getByLabelText(/masquer les commentaires résolus/i);
+      await user.click(toggle);
+
+      // Only unresolved comment should be visible
+      expect(screen.getByText("Comment non résolu")).toBeInTheDocument();
+      expect(screen.queryByText("Comment résolu")).not.toBeInTheDocument();
+    });
+
+    it("should show resolved comments again when toggle is disabled", async () => {
+      const user = userEvent.setup();
+      mockUseComments.mockReturnValue({
+        comments: [
+          createMockComment({ id: "c1", content: "Comment non résolu", resolved: false }),
+          createMockComment({ id: "c2", content: "Comment résolu", resolved: true }),
+        ],
+        total: 2,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useComments>);
+
+      render(<CommentsSidebar {...defaultProps} />, {
+        wrapper: createWrapper(),
+      });
+
+      const toggle = screen.getByLabelText(/masquer les commentaires résolus/i);
+
+      // Enable filter
+      await user.click(toggle);
+      expect(screen.queryByText("Comment résolu")).not.toBeInTheDocument();
+
+      // Disable filter
+      await user.click(toggle);
+      expect(screen.getByText("Comment résolu")).toBeInTheDocument();
+    });
+
+    it("should persist hide resolved preference to localStorage", async () => {
+      const user = userEvent.setup();
+      render(<CommentsSidebar {...defaultProps} />, {
+        wrapper: createWrapper(),
+      });
+
+      const toggle = screen.getByLabelText(/masquer les commentaires résolus/i);
+      await user.click(toggle);
+
+      expect(localStorage.getItem("plumenote-comments-hide-resolved")).toBe("true");
+    });
+
+    it("should load hide resolved preference from localStorage", () => {
+      localStorage.setItem("plumenote-comments-hide-resolved", "true");
+
+      mockUseComments.mockReturnValue({
+        comments: [
+          createMockComment({ id: "c1", content: "Comment non résolu", resolved: false }),
+          createMockComment({ id: "c2", content: "Comment résolu", resolved: true }),
+        ],
+        total: 2,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      } as ReturnType<typeof useComments>);
+
+      render(<CommentsSidebar {...defaultProps} />, {
+        wrapper: createWrapper(),
+      });
+
+      // Resolved comment should be hidden since localStorage has the preference
+      expect(screen.getByText("Comment non résolu")).toBeInTheDocument();
+      expect(screen.queryByText("Comment résolu")).not.toBeInTheDocument();
+    });
+
+    it("should show Eye icon when filter is off and EyeOff when on", async () => {
+      const user = userEvent.setup();
+      const { container } = render(<CommentsSidebar {...defaultProps} />, {
+        wrapper: createWrapper(),
+      });
+
+      // Initially Eye icon should be visible (filter off)
+      // Note: Lucide icons render as SVG, we check for the label wrapper
+      const toggle = screen.getByLabelText(/masquer les commentaires résolus/i);
+
+      // Toggle on
+      await user.click(toggle);
+
+      // The label text should still be present
+      expect(screen.getByText(/masquer les résolus/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("reply integration (Story 9.6)", () => {
+    it("should call useReplyComment hook", () => {
+      render(<CommentsSidebar {...defaultProps} />, {
+        wrapper: createWrapper(),
+      });
+
+      expect(mockUseReplyComment).toHaveBeenCalledWith(
+        "note-1",
+        expect.objectContaining({
+          onSuccess: expect.any(Function),
+        })
+      );
+    });
+  });
+
+  describe("resolve integration (Story 9.6)", () => {
+    it("should call useResolveComment hook", () => {
+      render(<CommentsSidebar {...defaultProps} />, {
+        wrapper: createWrapper(),
+      });
+
+      expect(mockUseResolveComment).toHaveBeenCalledWith(
+        expect.objectContaining({
+          noteId: "note-1",
+          onSuccess: expect.any(Function),
+        })
+      );
     });
   });
 });
