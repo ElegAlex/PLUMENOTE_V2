@@ -38,6 +38,7 @@ model User {
   workspaceMemberships WorkspaceMember[] @relation("WorkspaceMemberships") // Story 8.3: Workspace permissions
   folderPermissions FolderPermission[] @relation("FolderPermissions") // Story 8.4: Folder permissions
   versionsCreated NoteVersion[] @relation("VersionsCreated") // Story 9.1: Note versions
+  commentsCreated Comment[] @relation("CommentsCreated") // Story 9.4: Comments
 }
 
 model Account {
@@ -217,6 +218,9 @@ model Note {
 
   // Story 9.1: Version history
   versions     NoteVersion[] @relation("NoteVersions")
+
+  // Story 9.4: Comments
+  comments     Comment[] @relation("NoteComments")
 
   // Full-text search preparation (Epic 6)
   searchVector Unsupported("tsvector")?
@@ -449,4 +453,40 @@ model NoteVersion {
   @@index([noteId, createdAt(sort: Desc)])
   // Index pour queries par utilisateur
   @@index([createdById])
+}
+
+// ============================================
+// Comment Model (Epic 9 - Story 9.4 - Comments Infrastructure)
+// ============================================
+
+model Comment {
+  id          String    @id @default(cuid())
+  content     String    @db.Text             // Comment content (max 5000 chars enforced in Zod)
+  anchorStart Int                            // Start position in document (ProseMirror pos)
+  anchorEnd   Int                            // End position in document (ProseMirror pos)
+  resolved    Boolean   @default(false)      // Whether the comment thread is resolved
+  deletedAt   DateTime?                      // Soft delete timestamp
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Reference to the note being commented on
+  noteId      String
+  note        Note      @relation("NoteComments", fields: [noteId], references: [id], onDelete: Cascade)
+
+  // Self-relation for nested replies (one-to-many)
+  parentId    String?
+  parent      Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies     Comment[] @relation("CommentReplies")
+
+  // Who created this comment
+  createdById String
+  createdBy   User      @relation("CommentsCreated", fields: [createdById], references: [id], onDelete: Cascade)
+
+  // Indexes for efficient queries
+  @@index([noteId, deletedAt])              // Filter by note and active comments
+  @@index([noteId, anchorStart])            // Sort by position in document
+  @@index([parentId])                        // Find replies
+  @@index([createdById])                     // Find comments by user
 }
