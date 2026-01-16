@@ -23,9 +23,10 @@ import { use, useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
-import { Trash2, Star, Link2, Network, ChevronDown, History } from "lucide-react";
+import { Trash2, Star, Link2, Network, ChevronDown, History, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+import { useSession } from "next-auth/react";
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
 import {
   Editor as FallbackEditor,
@@ -47,6 +48,8 @@ import { TagsPanel } from "@/features/notes/components/TagsPanel";
 import { NoteBreadcrumb } from "@/features/notes/components/NoteBreadcrumb";
 import { BacklinksPanel } from "@/features/notes/components/BacklinksPanel";
 import { VersionHistoryPanel } from "@/features/versions/components/VersionHistoryPanel";
+import { CommentsSidebar, type CommentSelection } from "@/features/comments/components/CommentsSidebar";
+import { useComments } from "@/features/comments/hooks/useComments";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -74,6 +77,7 @@ interface NotePageProps {
 export default function NotePage({ params }: NotePageProps) {
   const { id } = use(params);
   const router = useRouter();
+  const { data: session } = useSession();
   const { note, isLoading, error, updateNoteAsync } = useNote(id);
   const { deleteNoteAsync, restoreNoteAsync, toggleFavoriteAsync, isTogglingFavorite } = useNotes({ enabled: false });
   const isOnline = useOnlineStatus();
@@ -91,6 +95,18 @@ export default function NotePage({ params }: NotePageProps) {
 
   // Version history panel state (Story 9.2: Affichage de l'Historique des Versions)
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+
+  // Comments panel state (Story 9.5: Ajout de Commentaires en Marge)
+  const [showComments, setShowComments] = useState(false);
+  const [textSelection, setTextSelection] = useState<CommentSelection | null>(null);
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [commentsMarksApplied, setCommentsMarksApplied] = useState(false);
+
+  // Fetch comments for initial marks sync (Story 9.5)
+  const { comments: existingComments } = useComments(note?.id, {
+    enabled: !!note?.id,
+    refetchInterval: false, // Don't poll, just fetch once for marks
+  });
 
   // Track user edits separately from the loaded note
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
@@ -196,6 +212,33 @@ export default function NotePage({ params }: NotePageProps) {
     setEditor(ed);
   }, []);
 
+  // Apply existing comment marks when editor is ready (Story 9.5 - M1 fix)
+  useEffect(() => {
+    const activeEditor = useFallbackEditor ? fallbackEditor : editor;
+    if (!activeEditor || commentsMarksApplied || existingComments.length === 0) {
+      return;
+    }
+
+    // Wait a tick for editor to be fully initialized
+    const timeoutId = setTimeout(() => {
+      existingComments.forEach((comment) => {
+        try {
+          activeEditor.commands.addCommentMark({
+            from: comment.anchorStart,
+            to: comment.anchorEnd,
+            commentId: comment.id,
+          });
+        } catch (e) {
+          // Silently ignore if position is invalid (document may have changed)
+          console.warn(`Could not apply mark for comment ${comment.id}:`, e);
+        }
+      });
+      setCommentsMarksApplied(true);
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [editor, fallbackEditor, useFallbackEditor, existingComments, commentsMarksApplied]);
+
   // Handle provider ready for presence tracking (Story 4-5)
   const handleProviderReady = useCallback((prov: HocuspocusProvider) => {
     setProvider(prov);
@@ -229,6 +272,80 @@ export default function NotePage({ params }: NotePageProps) {
       autoSave({ title: newTitle });
     },
     [autoSave]
+  );
+
+  // Handle text selection for comments (Story 9.5)
+  const handleSelectionChange = useCallback(
+    (selection: { text: string; from: number; to: number } | null) => {
+      if (selection) {
+        setTextSelection({
+          text: selection.text,
+          anchorStart: selection.from,
+          anchorEnd: selection.to,
+        });
+        // Auto-open panel when text is selected (if not already open)
+        if (!showComments) {
+          setShowComments(true);
+        }
+      }
+      // Note: We don't clear selection here when null - let the form cancel handle it
+      // This prevents the form from disappearing while typing
+    },
+    [showComments]
+  );
+
+  // Handle comment mark click (Story 9.5)
+  const handleCommentMarkClick = useCallback((commentId: string) => {
+    setSelectedCommentId(commentId);
+    setShowComments(true);
+  }, []);
+
+  // Handle comment selection in sidebar (Story 9.5)
+  const handleCommentSelect = useCallback((commentId: string) => {
+    setSelectedCommentId(commentId);
+    // Scroll to the comment highlight in editor
+    const activeEditor = useFallbackEditor ? fallbackEditor : editor;
+    if (activeEditor) {
+      const { state } = activeEditor;
+      const { doc, schema } = state;
+      const commentMarkType = schema.marks.comment;
+      if (commentMarkType) {
+        let found = false;
+        doc.descendants((node, pos) => {
+          if (found) return false; // Stop traversal if already found
+          for (const mark of node.marks) {
+            if (mark.type === commentMarkType && mark.attrs.commentId === commentId) {
+              activeEditor.commands.setTextSelection({ from: pos, to: pos + node.nodeSize });
+              activeEditor.commands.scrollIntoView();
+              found = true;
+              return false; // Stop traversal
+            }
+          }
+        });
+      }
+    }
+  }, [useFallbackEditor, fallbackEditor, editor]);
+
+  // Handle comment created (add highlight mark) (Story 9.5)
+  const handleCommentCreated = useCallback(
+    (commentId: string, anchorStart: number, anchorEnd: number) => {
+      const activeEditor = useFallbackEditor ? fallbackEditor : editor;
+      if (activeEditor) {
+        activeEditor.commands.addCommentMark({ from: anchorStart, to: anchorEnd, commentId });
+      }
+    },
+    [useFallbackEditor, fallbackEditor, editor]
+  );
+
+  // Handle comment deleted (remove highlight mark) (Story 9.5)
+  const handleCommentDeleted = useCallback(
+    (commentId: string) => {
+      const activeEditor = useFallbackEditor ? fallbackEditor : editor;
+      if (activeEditor) {
+        activeEditor.commands.removeCommentMark(commentId);
+      }
+    },
+    [useFallbackEditor, fallbackEditor, editor]
   );
 
   // Handle tags change (Story 3.6)
@@ -402,6 +519,16 @@ export default function NotePage({ params }: NotePageProps) {
         >
           <History className="h-5 w-5" />
         </Button>
+        {/* Comments button (Story 9.5: Ajout de Commentaires en Marge) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowComments(true)}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Voir les commentaires"
+        >
+          <MessageSquare className="h-5 w-5" />
+        </Button>
         {/* Graph view dropdown (Story 6.8 & 6.9: Vue Graphe) */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -490,6 +617,8 @@ export default function NotePage({ params }: NotePageProps) {
           content={note.content ?? ""}
           onUpdate={handleFallbackEditorUpdate}
           onEditorReady={handleFallbackEditorReady}
+          onCommentMarkClick={handleCommentMarkClick}
+          onSelectionChange={handleSelectionChange}
           className="rounded-md border bg-background"
         />
       ) : (
@@ -500,6 +629,8 @@ export default function NotePage({ params }: NotePageProps) {
           onConnectionStatusChange={setSyncStatus}
           onError={handleCollaborationError}
           onProviderReady={handleProviderReady}
+          onCommentMarkClick={handleCommentMarkClick}
+          onSelectionChange={handleSelectionChange}
         />
       )}
 
@@ -537,6 +668,20 @@ export default function NotePage({ params }: NotePageProps) {
         currentContent={note.content}
         open={showVersionHistory}
         onOpenChange={setShowVersionHistory}
+      />
+
+      {/* Comments sidebar (Story 9.5: Ajout de Commentaires en Marge) */}
+      <CommentsSidebar
+        noteId={note.id}
+        currentUserId={session?.user?.id}
+        open={showComments}
+        onOpenChange={setShowComments}
+        selection={textSelection}
+        onSelectionClear={() => setTextSelection(null)}
+        selectedCommentId={selectedCommentId}
+        onCommentSelect={handleCommentSelect}
+        onCommentCreated={handleCommentCreated}
+        onCommentDeleted={handleCommentDeleted}
       />
     </div>
   );

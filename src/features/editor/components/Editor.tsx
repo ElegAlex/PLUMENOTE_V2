@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { InternalLink } from "../extensions/InternalLink";
 import { InternalLinkSuggestion, defaultSearchNotes } from "../extensions/InternalLinkSuggestion";
 import { createSuggestionRender } from "../extensions/suggestion-render";
+import { CommentMark } from "@/features/comments/extensions/CommentMark";
 
 export interface EditorProps {
   /** Initial content (HTML string) */
@@ -32,6 +33,10 @@ export interface EditorProps {
   autoFocus?: boolean;
   /** Callback when editor is ready with editor instance */
   onEditorReady?: (editor: ReturnType<typeof useEditor>) => void;
+  /** Callback when a comment mark is clicked */
+  onCommentMarkClick?: (commentId: string) => void;
+  /** Callback when text is selected (for creating comments) */
+  onSelectionChange?: (selection: { text: string; from: number; to: number } | null) => void;
 }
 
 export interface EditorRef {
@@ -67,6 +72,8 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
     className,
     autoFocus = false,
     onEditorReady,
+    onCommentMarkClick,
+    onSelectionChange,
   },
   ref
 ) {
@@ -134,8 +141,11 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
           render: createSuggestionRender(),
         },
       }),
+      CommentMark.configure({
+        onCommentClick: onCommentMarkClick,
+      }),
     ],
-    [placeholder, router]
+    [placeholder, router, onCommentMarkClick]
   );
 
   const editor = useEditor({
@@ -185,6 +195,30 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
       onEditorReady(editor);
     }
   }, [editor, onEditorReady]);
+
+  // Handle selection changes for comment creation (Story 9.5)
+  useEffect(() => {
+    if (!editor || !onSelectionChange) return;
+
+    const handleSelectionUpdate = () => {
+      const { from, to, empty } = editor.state.selection;
+      if (empty || from === to) {
+        onSelectionChange(null);
+        return;
+      }
+      const text = editor.state.doc.textBetween(from, to, " ");
+      if (text.trim().length > 0) {
+        onSelectionChange({ text, from, to });
+      } else {
+        onSelectionChange(null);
+      }
+    };
+
+    editor.on("selectionUpdate", handleSelectionUpdate);
+    return () => {
+      editor.off("selectionUpdate", handleSelectionUpdate);
+    };
+  }, [editor, onSelectionChange]);
 
   if (!editor) {
     return (

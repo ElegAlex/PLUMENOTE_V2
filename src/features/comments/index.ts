@@ -1,37 +1,36 @@
 /**
- * Comments Feature - Client Exports
+ * Comments Feature Module
  *
- * Public API for the comments feature (client-side).
- * Exports types, schemas, and utilities for use in React components.
+ * Exports all components, hooks, and types for the comments system.
  *
- * @see Story 9.4: Modèle Comment et Infrastructure
+ * @see Story 9.5: Ajout de Commentaires en Marge
  */
 
 // Types
-export type {
-  Comment,
-  CommentAuthor,
-  CommentWithReplies,
-  CreateCommentInput,
-  UpdateCommentInput,
-  CommentsQueryOptions,
-  PaginationMeta,
-  CommentsListResponse,
-  CommentResponse,
-  CommentsListResult,
-} from "./types";
+export type { Comment, CreateCommentInput, UpdateCommentInput } from "./types";
 
-// Schemas
-export {
-  createCommentSchema,
-  updateCommentSchema,
-  commentIdSchema,
-  commentsQuerySchema,
-} from "./schemas/comment.schema";
+// Hooks
+export { useComments } from "./hooks/useComments";
+export { useCreateComment } from "./hooks/useCreateComment";
+export { useUpdateComment } from "./hooks/useUpdateComment";
+export { useDeleteComment } from "./hooks/useDeleteComment";
 
+// Components
+export { CommentItem } from "./components/CommentItem";
+export type { CommentItemProps } from "./components/CommentItem";
+
+export { CommentForm } from "./components/CommentForm";
+export type { CommentFormProps } from "./components/CommentForm";
+
+export { CommentsList } from "./components/CommentsList";
+export type { CommentsListProps } from "./components/CommentsList";
+
+export { CommentsSidebar } from "./components/CommentsSidebar";
 export type {
-  CreateCommentSchemaInput,
-  UpdateCommentSchemaInput,
-  CommentIdSchemaInput,
-  CommentsQuerySchemaInput,
-} from "./schemas/comment.schema";
+  CommentsSidebarProps,
+  CommentSelection,
+} from "./components/CommentsSidebar";
+
+// Extensions
+export { CommentMark } from "./extensions/CommentMark";
+export type { CommentMarkOptions } from "./extensions/CommentMark";

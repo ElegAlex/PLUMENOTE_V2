@@ -27,6 +27,7 @@ import { useVersionSnapshots } from "@/features/versions/hooks/useVersionSnapsho
 import { InternalLink } from "../extensions/InternalLink";
 import { InternalLinkSuggestion, defaultSearchNotes } from "../extensions/InternalLinkSuggestion";
 import { createSuggestionRender } from "../extensions/suggestion-render";
+import { CommentMark } from "@/features/comments/extensions/CommentMark";
 
 /**
  * Generate a unique color based on user ID using HSL
@@ -65,6 +66,10 @@ export interface CollaborativeEditorProps {
   onError?: (error: string) => void;
   /** Callback when provider is available (for presence tracking) */
   onProviderReady?: (provider: import("@hocuspocus/provider").HocuspocusProvider) => void;
+  /** Callback when a comment mark is clicked */
+  onCommentMarkClick?: (commentId: string) => void;
+  /** Callback when text is selected (for creating comments) */
+  onSelectionChange?: (selection: { text: string; from: number; to: number } | null) => void;
 }
 
 /**
@@ -91,6 +96,8 @@ export function CollaborativeEditor({
   onConnectionStatusChange,
   onError,
   onProviderReady,
+  onCommentMarkClick,
+  onSelectionChange,
 }: CollaborativeEditorProps) {
   // Get session for user info
   const { data: session } = useSession();
@@ -259,6 +266,9 @@ export function CollaborativeEditor({
           render: createSuggestionRender(),
         },
       }),
+      CommentMark.configure({
+        onCommentClick: onCommentMarkClick,
+      }),
     ];
 
     // Add Collaboration extension only when ydoc is available
@@ -281,7 +291,7 @@ export function CollaborativeEditor({
     }
 
     return baseExtensions;
-  }, [ydoc, provider, placeholder, cursorUser, router]);
+  }, [ydoc, provider, placeholder, cursorUser, router, onCommentMarkClick]);
 
   // Initialize Tiptap editor with Collaboration and CollaborationCursor extensions
   const editor = useEditor(
@@ -329,6 +339,30 @@ export function CollaborativeEditor({
       onConnectionStatusChange(status);
     }
   }, [status, onConnectionStatusChange]);
+
+  // Handle selection changes for comment creation (Story 9.5)
+  useEffect(() => {
+    if (!editor || !onSelectionChange) return;
+
+    const handleSelectionUpdate = () => {
+      const { from, to, empty } = editor.state.selection;
+      if (empty || from === to) {
+        onSelectionChange(null);
+        return;
+      }
+      const text = editor.state.doc.textBetween(from, to, " ");
+      if (text.trim().length > 0) {
+        onSelectionChange({ text, from, to });
+      } else {
+        onSelectionChange(null);
+      }
+    };
+
+    editor.on("selectionUpdate", handleSelectionUpdate);
+    return () => {
+      editor.off("selectionUpdate", handleSelectionUpdate);
+    };
+  }, [editor, onSelectionChange]);
 
   // Loading state - wait for ydoc and editor to be ready
   if (!ydoc || !editor) {

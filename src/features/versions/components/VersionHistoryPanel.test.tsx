@@ -446,6 +446,91 @@ describe("VersionHistoryPanel", () => {
         expect(screen.getByText("Historique des versions")).toBeInTheDocument();
       });
     });
+
+    it("should render bottom sheet on mobile", async () => {
+      setupMobileView();
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [],
+          meta: { total: 0, page: 1, pageSize: 20, totalPages: 0 },
+        }),
+      });
+
+      render(
+        <VersionHistoryPanel
+          noteId="note-1"
+          open={true}
+          onOpenChange={vi.fn()}
+        />,
+        { wrapper: createWrapper() }
+      );
+
+      // Sheet title should be visible when open on mobile
+      await waitFor(() => {
+        expect(screen.getByText("Historique des versions")).toBeInTheDocument();
+      });
+
+      // Should show empty state on mobile
+      await waitFor(() => {
+        expect(screen.getByText("Aucune version enregistrée")).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe("error handling", () => {
+    it("should handle fetch error gracefully", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "Internal Server Error",
+        json: async () => ({ detail: "Erreur serveur" }),
+      });
+
+      render(
+        <VersionHistoryPanel
+          noteId="note-1"
+          open={true}
+          onOpenChange={vi.fn()}
+        />,
+        { wrapper: createWrapper() }
+      );
+
+      // Should eventually stop showing loading state
+      // The hook will handle the error internally
+      await waitFor(
+        () => {
+          expect(
+            screen.queryByLabelText("Chargement de l'historique")
+          ).not.toBeInTheDocument();
+        },
+        { timeout: 3000 }
+      );
+    });
+
+    it("should handle network error gracefully", async () => {
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+      render(
+        <VersionHistoryPanel
+          noteId="note-1"
+          open={true}
+          onOpenChange={vi.fn()}
+        />,
+        { wrapper: createWrapper() }
+      );
+
+      // Should eventually stop showing loading state after error
+      await waitFor(
+        () => {
+          expect(
+            screen.queryByLabelText("Chargement de l'historique")
+          ).not.toBeInTheDocument();
+        },
+        { timeout: 3000 }
+      );
+    });
   });
 
   describe("accessibility", () => {
