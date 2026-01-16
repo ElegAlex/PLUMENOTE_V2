@@ -115,6 +115,7 @@ async function fetchNotesRelations(noteIds: string[], folderIds: string[]): Prom
 /**
  * Selection fields for Note responses (excludes internal fields)
  * @see Story 8.3: Added workspaceId for permission checks
+ * @see Story 10.1: Added viewCount, lastViewedAt, lastModifiedById for metrics
  */
 const noteSelect = {
   id: true,
@@ -127,10 +128,24 @@ const noteSelect = {
   createdAt: true,
   updatedAt: true,
   createdById: true,
+  viewCount: true,
+  lastViewedAt: true,
+  lastModifiedById: true,
 } as const;
 
 /**
- * Selection fields for Note with tags and folder
+ * Selection fields for lastModifiedBy relation
+ * @see Story 10.1: Tracking des Vues et Métadonnées
+ */
+const lastModifiedBySelect = {
+  id: true,
+  name: true,
+  image: true,
+} as const;
+
+/**
+ * Selection fields for Note with tags, folder, and lastModifiedBy
+ * @see Story 10.1: Added lastModifiedBy for metrics
  */
 const noteWithTagsSelect = {
   ...noteSelect,
@@ -144,6 +159,9 @@ const noteWithTagsSelect = {
       },
     },
   },
+  lastModifiedBy: {
+    select: lastModifiedBySelect,
+  },
 } as const;
 
 /**
@@ -153,19 +171,22 @@ export type NoteSortField = "updatedAt" | "createdAt" | "title" | "sortOrder";
 export type SortDirection = "asc" | "desc";
 
 /**
- * Transform Prisma note with tags and folder to API format
+ * Transform Prisma note with tags, folder, and lastModifiedBy to API format
+ * @see Story 10.1: Added lastModifiedBy transformation
  */
 function transformNoteWithTags(
   note: {
     tags?: { tag: { id: string; name: string; color: string } }[];
     folder?: { id: string; name: string; parentId: string | null; createdAt: Date; updatedAt: Date; createdById: string } | null;
+    lastModifiedBy?: { id: string; name: string | null; image: string | null } | null;
   } & Record<string, unknown>
 ): Note {
-  const { tags, folder, ...rest } = note;
+  const { tags, folder, lastModifiedBy, ...rest } = note;
   return {
     ...rest,
     tags: tags?.map((t) => t.tag),
     folder: folder ?? null,
+    lastModifiedBy: lastModifiedBy ?? null,
   } as Note;
 }
 
@@ -183,6 +204,7 @@ export async function createNote(
       folderId: data.folderId ?? null,
       isFavorite: data.isFavorite ?? false,
       createdById: userId,
+      lastModifiedById: userId, // Story 10.1: Creator is also the first modifier
       ...(data.tagIds?.length && {
         tags: {
           create: data.tagIds.map((tagId) => ({ tagId })),
@@ -467,6 +489,7 @@ async function searchNotesWithFTS(
 
   try {
     // Execute queries with parameters
+    // Story 10.1: Added viewCount, lastViewedAt, lastModifiedById
     const [notesResult, countResult] = await Promise.all([
       prisma.$queryRawUnsafe<Array<{
         id: string;
@@ -479,11 +502,15 @@ async function searchNotesWithFTS(
         createdAt: Date;
         updatedAt: Date;
         createdById: string;
+        viewCount: number;
+        lastViewedAt: Date | null;
+        lastModifiedById: string | null;
         rank: number;
       }>>(
         `SELECT
           n.id, n.title, n.content, n."folderId", n."workspaceId", n."isFavorite", n."sortOrder",
           n."createdAt", n."updatedAt", n."createdById",
+          n."viewCount", n."lastViewedAt", n."lastModifiedById",
           ts_rank("searchVector", to_tsquery('french', $2) || to_tsquery('english', $2)) as rank
         FROM "Note" n
         WHERE ${whereClause}
@@ -515,6 +542,7 @@ async function searchNotesWithFTS(
     const { tagsByNoteId, foldersById } = await fetchNotesRelations(noteIds, folderIds);
 
     // Transform results to Note format
+    // Story 10.1: Added viewCount, lastViewedAt, lastModifiedById (no lastModifiedBy hydration for list)
     const notes: Note[] = notesResult.map((n) => ({
       id: n.id,
       title: n.title,
@@ -526,6 +554,9 @@ async function searchNotesWithFTS(
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
       createdById: n.createdById,
+      viewCount: n.viewCount,
+      lastViewedAt: n.lastViewedAt,
+      lastModifiedById: n.lastModifiedById,
       tags: tagsByNoteId.get(n.id) ?? [],
       folder: n.folderId ? foldersById.get(n.folderId) ?? null : null,
     }));
@@ -750,6 +781,7 @@ export async function searchNotes(
 
   try {
     // Query with ts_headline for highlights and ts_rank for relevance
+    // Story 10.1: Added viewCount, lastViewedAt, lastModifiedById
     const notesResult = await prisma.$queryRawUnsafe<Array<{
       id: string;
       title: string;
@@ -761,12 +793,16 @@ export async function searchNotes(
       createdAt: Date;
       updatedAt: Date;
       createdById: string;
+      viewCount: number;
+      lastViewedAt: Date | null;
+      lastModifiedById: string | null;
       highlight: string | null;
       rank: number;
     }>>(
       `SELECT
         n.id, n.title, n.content, n."folderId", n."workspaceId", n."isFavorite", n."sortOrder",
         n."createdAt", n."updatedAt", n."createdById",
+        n."viewCount", n."lastViewedAt", n."lastModifiedById",
         ts_headline(
           'french',
           COALESCE(n.content, ''),
@@ -798,6 +834,7 @@ export async function searchNotes(
     const { tagsByNoteId, foldersById } = await fetchNotesRelations(noteIds, folderIds);
 
     // Transform results
+    // Story 10.1: Added viewCount, lastViewedAt, lastModifiedById
     const notes: SearchResultNote[] = notesResult.map((n) => ({
       id: n.id,
       title: n.title,
@@ -809,6 +846,9 @@ export async function searchNotes(
       createdAt: n.createdAt,
       updatedAt: n.updatedAt,
       createdById: n.createdById,
+      viewCount: n.viewCount,
+      lastViewedAt: n.lastViewedAt,
+      lastModifiedById: n.lastModifiedById,
       tags: tagsByNoteId.get(n.id) ?? [],
       folder: n.folderId ? foldersById.get(n.folderId) ?? null : null,
       highlight: n.highlight,
@@ -905,6 +945,7 @@ export async function updateNote(
       ...(data.folderId !== undefined && { folderId: data.folderId }),
       ...(data.isFavorite !== undefined && { isFavorite: data.isFavorite }),
       ...tagUpdate,
+      lastModifiedById: userId, // Story 10.1: Track last modifier
     },
     select: noteWithTagsSelect,
   });
@@ -963,7 +1004,10 @@ export async function toggleNoteFavorite(
 
   const note = await prisma.note.update({
     where: { id: noteId },
-    data: { isFavorite: !existing.isFavorite },
+    data: {
+      isFavorite: !existing.isFavorite,
+      lastModifiedById: userId, // Story 10.1: Track last modifier for all modifications
+    },
     select: noteWithTagsSelect,
   });
 

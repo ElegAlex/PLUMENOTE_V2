@@ -39,6 +39,7 @@ model User {
   folderPermissions FolderPermission[] @relation("FolderPermissions") // Story 8.4: Folder permissions
   versionsCreated NoteVersion[] @relation("VersionsCreated") // Story 9.1: Note versions
   commentsCreated Comment[] @relation("CommentsCreated") // Story 9.4: Comments
+  notesLastModified Note[] @relation("NotesLastModified") // Story 10.1: Metrics tracking
 }
 
 model Account {
@@ -222,6 +223,12 @@ model Note {
   // Story 9.4: Comments
   comments     Comment[] @relation("NoteComments")
 
+  // Story 10.1: Metrics tracking
+  viewCount        Int       @default(0)      // Aggregated unique view count
+  lastViewedAt     DateTime?                  // Last consultation timestamp (any user)
+  lastModifiedById String?                    // Last user who modified the note
+  lastModifiedBy   User?     @relation("NotesLastModified", fields: [lastModifiedById], references: [id], onDelete: SetNull)
+
   // Full-text search preparation (Epic 6)
   searchVector Unsupported("tsvector")?
 
@@ -233,6 +240,8 @@ model Note {
   @@index([deletedAt])
   @@index([folderId])
   @@index([workspaceId])
+  @@index([viewCount])        // Story 10.1: Sort by popularity
+  @@index([lastViewedAt])     // Story 10.1: Sort by recent activity
 }
 
 // ============================================

@@ -52,11 +52,15 @@ describe("notes.service", () => {
       title: "Test Note",
       content: "# Hello",
       folderId: null,
+      workspaceId: null,
       isFavorite: false,
       sortOrder: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
       createdById: "user-1",
+      viewCount: 0,
+      lastViewedAt: null,
+      lastModifiedById: "user-1", // Story 10.1: Creator is first modifier
       folder: null,
       tags: [],
     };
@@ -77,6 +81,7 @@ describe("notes.service", () => {
           folderId: null,
           isFavorite: false,
           createdById: "user-1",
+          lastModifiedById: "user-1", // Story 10.1: Creator is first modifier
         },
         select: expect.any(Object),
       });
@@ -97,6 +102,7 @@ describe("notes.service", () => {
           folderId: null,
           isFavorite: false,
           createdById: "user-1",
+          lastModifiedById: "user-1", // Story 10.1: Creator is first modifier
         },
         select: expect.any(Object),
       });
@@ -117,6 +123,7 @@ describe("notes.service", () => {
           folderId: null,
           isFavorite: false,
           createdById: "user-1",
+          lastModifiedById: "user-1", // Story 10.1: Creator is first modifier
         },
         select: expect.any(Object),
       });
@@ -129,11 +136,15 @@ describe("notes.service", () => {
       title: "Test Note",
       content: "# Hello",
       folderId: null,
+      workspaceId: null,
       isFavorite: false,
       sortOrder: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
       createdById: "user-1",
+      viewCount: 0,
+      lastViewedAt: null,
+      lastModifiedById: null,
       folder: null,
       tags: [],
     };
@@ -249,11 +260,15 @@ describe("notes.service", () => {
       title: "Updated Title",
       content: "Updated content",
       folderId: null,
+      workspaceId: null,
       isFavorite: false,
       sortOrder: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
       createdById: "user-1",
+      viewCount: 0,
+      lastViewedAt: null,
+      lastModifiedById: "user-1",
       folder: null,
       tags: [],
     };
@@ -309,7 +324,7 @@ describe("notes.service", () => {
       ).rejects.toThrow(NotFoundError);
     });
 
-    it("should only update provided fields", async () => {
+    it("should only update provided fields and set lastModifiedById", async () => {
       vi.mocked(prisma.note.findUnique).mockResolvedValue({
         createdById: "user-1",
         deletedAt: null,
@@ -320,12 +335,12 @@ describe("notes.service", () => {
 
       expect(prisma.note.update).toHaveBeenCalledWith({
         where: { id: "note-123" },
-        data: { title: "New Title" },
+        data: { title: "New Title", lastModifiedById: "user-1" },
         select: expect.any(Object),
       });
     });
 
-    it("should update both title and content when provided", async () => {
+    it("should update both title and content when provided and set lastModifiedById", async () => {
       vi.mocked(prisma.note.findUnique).mockResolvedValue({
         createdById: "user-1",
         deletedAt: null,
@@ -339,7 +354,7 @@ describe("notes.service", () => {
 
       expect(prisma.note.update).toHaveBeenCalledWith({
         where: { id: "note-123" },
-        data: { title: "New Title", content: "New content" },
+        data: { title: "New Title", content: "New content", lastModifiedById: "user-1" },
         select: expect.any(Object),
       });
     });

@@ -2,8 +2,9 @@
  * API Routes: /api/notes/[id]/view
  *
  * Story 6.4: Notes Récentes - Track note views
+ * Story 10.1: Enhanced with viewCount tracking and deduplication (1 view/user/hour)
  *
- * - POST: Track a note view (upsert - update if exists, create if not)
+ * - POST: Track a note view with intelligent deduplication
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { createErrorResponse, NotFoundError } from "@/lib/api-error";
 import { noteIdSchema } from "@/features/notes/schemas/note.schema";
+import { trackNoteView } from "@/features/analytics";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -19,11 +21,13 @@ type RouteParams = { params: Promise<{ id: string }> };
  * POST /api/notes/[id]/view
  *
  * Track that the authenticated user viewed this note.
- * Uses upsert to ensure only one view record per user+note,
- * updating the viewedAt timestamp on each subsequent view.
+ * Uses deduplication to only count 1 view per user per hour (Story 10.1).
+ * Updates viewCount and lastViewedAt on Note when view is counted.
  *
  * Returns:
- * - 200: View tracked successfully with viewedAt timestamp
+ * - 200: View tracked successfully
+ *   - { data: { counted: boolean, viewCount: number } }
+ *   - counted: true if view was counted, false if deduplicated
  * - 400: Invalid note ID format
  * - 401: Authentication required
  * - 404: Note not found or not accessible by user
@@ -52,13 +56,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const userId = session.user.id;
 
-    // Verify note exists and user has access (owner check)
-    // Note: In future with workspaces, this would check workspace access too
+    // Verify note exists and user has access
+    // TODO: In Story 8.x, this checks workspace access via canAccessWorkspace
     const note = await prisma.note.findFirst({
       where: {
         id: noteId,
-        createdById: userId,
         deletedAt: null,
+        OR: [
+          // Personal notes (created by user, no workspace)
+          { createdById: userId, workspaceId: null },
+          // Notes in workspaces owned by user
+          { workspace: { ownerId: userId } },
+          // Notes in workspaces where user is member
+          { workspace: { members: { some: { userId } } } },
+        ],
       },
       select: { id: true },
     });
@@ -67,28 +78,17 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       throw new NotFoundError("Note not found");
     }
 
-    // Upsert the view record - update viewedAt if exists, create if not
-    // This ensures only one record per user+note (AC #4: no duplicates)
-    const view = await prisma.userNoteView.upsert({
-      where: {
-        userId_noteId: {
-          userId,
-          noteId,
-        },
-      },
-      update: {
-        viewedAt: new Date(),
-      },
-      create: {
-        userId,
-        noteId,
-      },
-    });
+    // Track the view with deduplication (Story 10.1)
+    // Returns { counted: boolean, viewCount: number }
+    const result = await trackNoteView(noteId, userId);
+
+    logger.info(
+      { noteId, userId, counted: result.counted, viewCount: result.viewCount },
+      "Note view tracked"
+    );
 
     return NextResponse.json({
-      data: {
-        viewedAt: view.viewedAt.toISOString(),
-      },
+      data: result,
     });
   } catch (error) {
     if (error instanceof NotFoundError) {

@@ -2,6 +2,7 @@ import type {
   Note as PrismaNote,
   Tag as PrismaTag,
   Folder as PrismaFolder,
+  User as PrismaUser,
 } from "@prisma/client";
 
 /**
@@ -58,8 +59,15 @@ export interface FolderWithCount extends Folder {
 }
 
 /**
+ * Minimal user type for lastModifiedBy relation
+ * @see Story 10.1: Tracking des Vues et Métadonnées
+ */
+export type LastModifiedByUser = Pick<PrismaUser, "id" | "name" | "image">;
+
+/**
  * Note type for API responses (excludes internal fields like ydoc, searchVector)
  * @see Story 8.3: Added workspaceId for permission checks
+ * @see Story 10.1: Added viewCount, lastViewedAt, lastModifiedById for metrics
  */
 export type Note = Pick<
   PrismaNote,
@@ -73,10 +81,24 @@ export type Note = Pick<
   | "createdAt"
   | "updatedAt"
   | "createdById"
+  | "viewCount"
+  | "lastViewedAt"
+  | "lastModifiedById"
 > & {
   tags?: Tag[];
   folder?: Folder | null;
+  lastModifiedBy?: LastModifiedByUser | null;
 };
+
+/**
+ * Note metrics for analytics display
+ * @see Story 10.1: Tracking des Vues et Métadonnées
+ */
+export interface NoteMetrics {
+  viewCount: number;
+  lastViewedAt: Date | null;
+  lastModifiedBy: LastModifiedByUser | null;
+}
 
 /**
  * Input for creating a new folder
@@ -149,8 +171,12 @@ export interface NotesListResponse {
 }
 
 /**
- * Single note response
+ * Single note response (includes metrics and relations)
+ * @see Story 10.1: Note detail includes lastModifiedBy hydrated
  */
 export interface NoteResponse {
   data: Note;
 }
+
+// ViewTrackingResult is exported from @/features/analytics
+// Use: import { ViewTrackingResult } from "@/features/analytics";

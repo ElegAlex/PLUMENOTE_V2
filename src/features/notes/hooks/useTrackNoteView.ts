@@ -4,9 +4,11 @@
  * React Query hook for tracking note views
  *
  * Story 6.4: Notes Récentes - Track when user views a note
+ * Story 10.1: Enhanced with viewCount tracking and deduplication
  *
  * @see AC #2: Track views automatically when note is opened
  * @see AC #4: Only one entry per note (upsert behavior)
+ * @see Story 10.1: Deduplication (1 view/user/hour) and viewCount tracking
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -15,10 +17,14 @@ import { recentNotesKeys } from "./useRecentNotes";
 
 /**
  * Response from tracking a view
+ * @see Story 10.1: Enhanced response with counted flag and viewCount
  */
 interface TrackViewResponse {
   data: {
-    viewedAt: string;
+    /** Whether the view was counted (false if deduplicated within 1 hour) */
+    counted: boolean;
+    /** Current total view count for the note */
+    viewCount: number;
   };
 }
 
@@ -89,9 +95,15 @@ export function useTrackNoteView(
 
   const mutation = useMutation({
     mutationFn: trackNoteView,
-    onSuccess: () => {
+    onSuccess: (data, noteId) => {
       // Invalidate recent notes cache so the new view appears
       queryClient.invalidateQueries({ queryKey: recentNotesKeys.all });
+
+      // Story 10.1: If view was counted, also invalidate the note detail
+      // to update viewCount in the UI
+      if (data.counted) {
+        queryClient.invalidateQueries({ queryKey: ["notes", "detail", noteId] });
+      }
     },
     // Don't throw on error - view tracking is non-critical
     onError: (error) => {
