@@ -1,28 +1,23 @@
 /**
- * Analytics feature module
- * @see Story 10.1: Tracking des Vues et Métadonnées
- * @see Story 10.2: Affichage du Nombre de Vues
- * @see Story 10.3: Affichage Date de Modification et Contributeur
+ * Analytics feature module - Server-safe exports
  *
- * Provides note view tracking, metrics infrastructure, and display components.
+ * This file contains only server-safe exports (types and services).
+ * For client-side components and hooks, import from "./client" instead.
+ *
+ * @see Story 10.1: Tracking des Vues et Métadonnées
+ * @see Story 10.4: Dashboard Statistiques Admin
  */
 
-// Types
+// Types (safe for both server and client)
 export type { ViewTrackingResult, NoteViewStats } from "./types";
+export type {
+  AdminStats,
+  DailyActivity,
+  TopNote,
+  TopContributor,
+  AdminStatsQueryParams,
+} from "./types/admin-stats";
 
-// Services
+// Services (server-only)
 export { trackNoteView, getNoteViewCount } from "./services/note-view.service";
-
-// Components
-export { ViewCount } from "./components/ViewCount";
-export type { ViewCountProps } from "./components/ViewCount";
-
-// Story 10.3 Components
-export { LastModifiedBy } from "./components/LastModifiedBy";
-export type { LastModifiedByProps, LastModifiedByUser } from "./components/LastModifiedBy";
-
-export { ModificationDate } from "./components/ModificationDate";
-export type { ModificationDateProps } from "./components/ModificationDate";
-
-export { NoteModificationInfo } from "./components/NoteModificationInfo";
-export type { NoteModificationInfoProps } from "./components/NoteModificationInfo";
+export { getAdminStats } from "./services/admin-stats.service";

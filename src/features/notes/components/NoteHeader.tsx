@@ -20,7 +20,7 @@ import { Check, Loader2, AlertCircle, Cloud, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewCount } from "@/features/analytics/components/ViewCount";
 import { NoteModificationInfo } from "@/features/analytics/components/NoteModificationInfo";
-import type { LastModifiedByUser } from "@/features/analytics";
+import type { LastModifiedByUser } from "@/features/analytics/client";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error" | "offline";
 
