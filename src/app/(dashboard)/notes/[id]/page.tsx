@@ -23,7 +23,7 @@ import { use, useCallback, useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
-import { Trash2, Star, Link2, Network, ChevronDown } from "lucide-react";
+import { Trash2, Star, Link2, Network, ChevronDown, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { useOnlineStatus } from "@/lib/hooks/useOnlineStatus";
@@ -46,6 +46,7 @@ import { NoteHeader, type SaveStatus } from "@/features/notes/components/NoteHea
 import { TagsPanel } from "@/features/notes/components/TagsPanel";
 import { NoteBreadcrumb } from "@/features/notes/components/NoteBreadcrumb";
 import { BacklinksPanel } from "@/features/notes/components/BacklinksPanel";
+import { VersionHistoryPanel } from "@/features/versions/components/VersionHistoryPanel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -87,6 +88,9 @@ export default function NotePage({ params }: NotePageProps) {
   // Backlinks panel state (Story 6.7: Panneau Backlinks)
   const [showBacklinks, setShowBacklinks] = useState(false);
   const { backlinks } = useBacklinks(note?.id, { enabled: !!note });
+
+  // Version history panel state (Story 9.2: Affichage de l'Historique des Versions)
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   // Track user edits separately from the loaded note
   const [editedTitle, setEditedTitle] = useState<string | null>(null);
@@ -388,6 +392,16 @@ export default function NotePage({ params }: NotePageProps) {
             </span>
           )}
         </Button>
+        {/* Version history button (Story 9.2: Affichage de l'Historique des Versions) */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShowVersionHistory(true)}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label="Voir l'historique des versions"
+        >
+          <History className="h-5 w-5" />
+        </Button>
         {/* Graph view dropdown (Story 6.8 & 6.9: Vue Graphe) */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -515,6 +529,14 @@ export default function NotePage({ params }: NotePageProps) {
         noteId={note.id}
         open={showBacklinks}
         onOpenChange={setShowBacklinks}
+      />
+
+      {/* Version history panel (Story 9.2: Affichage de l'Historique des Versions) */}
+      <VersionHistoryPanel
+        noteId={note.id}
+        currentContent={note.content}
+        open={showVersionHistory}
+        onOpenChange={setShowVersionHistory}
       />
     </div>
   );
