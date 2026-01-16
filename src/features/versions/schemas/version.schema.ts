@@ -66,3 +66,15 @@ export const snapshotRequestSchema = z.object({
 });
 
 export type SnapshotRequestSchemaInput = z.infer<typeof snapshotRequestSchema>;
+
+/**
+ * Schema for restore version request body
+ * - versionId: required, CUID format
+ *
+ * @see Story 9.3: Restauration de Version
+ */
+export const restoreVersionSchema = z.object({
+  versionId: z.string().cuid("Invalid version ID format"),
+});
+
+export type RestoreVersionSchemaInput = z.infer<typeof restoreVersionSchema>;

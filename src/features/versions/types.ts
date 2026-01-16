@@ -79,3 +79,33 @@ export interface SnapshotResult {
     | "forbidden"
     | "error";
 }
+
+/**
+ * Result of a version restore operation
+ * @see Story 9.3: Restauration de Version
+ */
+export interface RestoreResult {
+  /** The note after restoration */
+  note: {
+    id: string;
+    title: string;
+    content: string | null;
+    updatedAt: Date;
+  };
+  /** The version number that was restored from */
+  restoredFromVersion: number;
+  /** ID of the undo snapshot (can be used to revert the restoration) */
+  undoVersionId: string;
+}
+
+/**
+ * Response format for restore operation
+ * @see Story 9.3
+ */
+export interface RestoreVersionResponse {
+  data: RestoreResult["note"];
+  meta: {
+    restoredFrom: number;
+    undoVersionId: string;
+  };
+}

@@ -17,6 +17,8 @@ export type {
   VersionsListResponse,
   VersionResponse,
   SnapshotResult,
+  RestoreResult,
+  RestoreVersionResponse,
 } from "./types";
 
 // Services (server-only - use Prisma)
@@ -26,6 +28,7 @@ export {
   getVersionById,
   getVersionByNumber,
   getLatestVersionNumber,
+  restoreVersion,
 } from "./services/versions.service";
 
 export {
@@ -42,6 +45,7 @@ export {
   noteIdParamSchema,
   versionsQuerySchema,
   snapshotRequestSchema,
+  restoreVersionSchema,
 } from "./schemas/version.schema";
 
 export type {
@@ -50,4 +54,5 @@ export type {
   NoteIdParamSchemaInput,
   VersionsQuerySchemaInput,
   SnapshotRequestSchemaInput,
+  RestoreVersionSchemaInput,
 } from "./schemas/version.schema";

@@ -6,8 +6,10 @@
  * Displays a version's content in read-only mode.
  * Shows header with version info and rendered Markdown content.
  * Supports toggle between content view and diff view.
+ * Provides restore functionality to revert to this version.
  *
  * @see Story 9.2: Affichage de l'Historique des Versions
+ * @see Story 9.3: Restauration de Version
  * @see AC: #4 - Prévisualisation du contenu en lecture seule
  * @see AC: #5 - Contenu Markdown rendu
  * @see AC: #6 - Diff visuel entre version sélectionnée et actuelle
@@ -17,13 +19,14 @@ import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import DOMPurify from "dompurify";
-import { Eye, GitCompare } from "lucide-react";
+import { Eye, GitCompare, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { getInitials } from "../utils";
 import { VersionDiff } from "./VersionDiff";
+import { RestoreVersionDialog } from "./RestoreVersionDialog";
+import { useRestoreVersion } from "../hooks/useRestoreVersion";
 import type { NoteVersion } from "../types";
 
 export interface VersionPreviewProps {
@@ -31,6 +34,14 @@ export interface VersionPreviewProps {
   version: NoteVersion;
   /** Current note content for diff comparison */
   currentContent?: string | null;
+  /** Note ID (required for restore functionality) */
+  noteId?: string;
+  /** Current version number (to disable restore for current version) */
+  currentVersionNumber?: number;
+  /** Author name for the version */
+  versionAuthor?: string | null;
+  /** Callback after successful restoration */
+  onRestoreSuccess?: () => void;
 }
 
 /**
@@ -80,21 +91,42 @@ function renderMarkdown(content: string): string {
 }
 
 /**
- * Preview of a version's content
+ * Preview of a version's content with restore capability
  *
  * @example
  * ```tsx
  * <VersionPreview
  *   version={selectedVersion}
  *   currentContent={note.content}
+ *   noteId={note.id}
+ *   currentVersionNumber={latestVersion}
+ *   versionAuthor={version.createdBy?.name}
+ *   onRestoreSuccess={() => closePanel()}
  * />
  * ```
  */
 export function VersionPreview({
   version,
   currentContent,
+  noteId,
+  currentVersionNumber,
+  versionAuthor,
+  onRestoreSuccess,
 }: VersionPreviewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("content");
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false);
+
+  // Restore hook - only initialize if noteId is provided
+  const { restore, isRestoring } = useRestoreVersion({
+    noteId: noteId ?? "",
+    onSuccess: () => {
+      setShowRestoreDialog(false);
+      onRestoreSuccess?.();
+    },
+  });
+
+  // Check if restore is possible
+  const canRestore = noteId && version.version !== currentVersionNumber;
 
   // Memoize the rendered and sanitized Markdown
   const sanitizedContent = useMemo(() => {
@@ -189,10 +221,38 @@ export function VersionPreview({
         )}
       </div>
 
-      {/* Footer note */}
-      <p className="text-xs text-muted-foreground mt-4 text-center">
-        Cette version est en lecture seule
-      </p>
+      {/* Restore button and footer */}
+      <div className="mt-4 space-y-3">
+        {canRestore && (
+          <Button
+            onClick={() => setShowRestoreDialog(true)}
+            className="w-full gap-2"
+            variant="default"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Restaurer cette version
+          </Button>
+        )}
+
+        <p className="text-xs text-muted-foreground text-center">
+          {canRestore
+            ? "Cliquez pour restaurer cette version"
+            : "Cette version est en lecture seule"}
+        </p>
+      </div>
+
+      {/* Restore confirmation dialog */}
+      {noteId && (
+        <RestoreVersionDialog
+          open={showRestoreDialog}
+          onOpenChange={setShowRestoreDialog}
+          versionNumber={version.version}
+          versionDate={version.createdAt}
+          versionAuthor={versionAuthor}
+          onConfirm={() => restore(version.id)}
+          isRestoring={isRestoring}
+        />
+      )}
     </div>
   );
 }

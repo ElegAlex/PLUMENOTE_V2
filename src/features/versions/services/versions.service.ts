@@ -13,11 +13,13 @@ import { logger } from "@/lib/logger";
 import {
   canAccessWorkspace,
   canAccessFolder,
+  canEditNotes,
 } from "@/features/workspaces/services/permissions.service";
 import type {
   NoteVersion,
   NoteVersionSummary,
   CreateVersionInput,
+  RestoreResult,
 } from "../types";
 
 /**
@@ -387,4 +389,177 @@ export async function getVersionByNumber(
   );
 
   return version;
+}
+
+// ============================================
+// Version Restoration (Story 9.3)
+// ============================================
+
+/**
+ * Check if a user can edit a note
+ *
+ * Edit is allowed if:
+ * - Note is personal (workspaceId === null) and user is the creator
+ * - Note is in a workspace where user has edit permissions
+ *
+ * @param userId - ID of the user
+ * @param note - Note object with workspaceId, createdById
+ * @returns true if user can edit the note
+ */
+async function canEditNote(
+  userId: string,
+  note: { workspaceId: string | null; createdById: string }
+): Promise<boolean> {
+  if (note.workspaceId) {
+    // Note belongs to a workspace - check workspace edit permissions
+    return canEditNotes(userId, note.workspaceId);
+  } else {
+    // Personal note (no workspace) - only creator can edit
+    return note.createdById === userId;
+  }
+}
+
+/**
+ * Restore a note to a previous version
+ *
+ * This operation:
+ * 1. Creates a snapshot of the current state (for undo)
+ * 2. Loads the source version
+ * 3. Updates the note with the version's content
+ * 4. Creates a new version marking the restoration
+ *
+ * IMPORTANT: Restoration NEVER destroys history - it creates new versions.
+ *
+ * @param noteId - ID of the note to restore
+ * @param versionId - ID of the version to restore from
+ * @param userId - ID of the user performing the restoration
+ * @returns RestoreResult with note, restoredFromVersion, and undoVersionId
+ * @throws {NotFoundError} If note or version doesn't exist
+ * @throws {ForbiddenError} If user doesn't have edit permission
+ *
+ * @see Story 9.3: Restauration de Version
+ */
+export async function restoreVersion(
+  noteId: string,
+  versionId: string,
+  userId: string
+): Promise<RestoreResult> {
+  // 1. Verify that the note exists and is not deleted
+  const note = await prisma.note.findUnique({
+    where: { id: noteId },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      ydoc: true,
+      workspaceId: true,
+      createdById: true,
+      deletedAt: true,
+    },
+  });
+
+  if (!note || note.deletedAt) {
+    throw new NotFoundError(`Note with ID '${noteId}' not found`);
+  }
+
+  // 2. Verify user has edit permission
+  const canEdit = await canEditNote(userId, note);
+  if (!canEdit) {
+    logger.warn(
+      { noteId, userId, workspaceId: note.workspaceId },
+      "Unauthorized version restore attempt"
+    );
+    throw new ForbiddenError("You do not have permission to edit this note");
+  }
+
+  // 3. Load the source version (the one to restore from)
+  const sourceVersion = await prisma.noteVersion.findUnique({
+    where: { id: versionId },
+    select: {
+      id: true,
+      version: true,
+      title: true,
+      content: true,
+      ydoc: true,
+      noteId: true,
+    },
+  });
+
+  if (!sourceVersion || sourceVersion.noteId !== noteId) {
+    throw new NotFoundError(`Version with ID '${versionId}' not found for this note`);
+  }
+
+  // 4. Perform restoration in a transaction
+  const result = await prisma.$transaction(async (tx) => {
+    // 4a. Get the latest version number
+    const latestVersion = await tx.noteVersion.findFirst({
+      where: { noteId },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
+
+    const nextVersion = (latestVersion?.version ?? 0) + 1;
+
+    // 4b. Create snapshot of current state (for undo)
+    const undoSnapshot = await tx.noteVersion.create({
+      data: {
+        noteId,
+        version: nextVersion,
+        title: note.title,
+        content: note.content,
+        ydoc: note.ydoc,
+        createdById: userId,
+      },
+      select: { id: true, version: true },
+    });
+
+    // 4c. Update the note with the source version's content
+    // Priority: use ydoc if available for CRDT-exact restoration
+    const updatedNote = await tx.note.update({
+      where: { id: noteId },
+      data: {
+        title: sourceVersion.title,
+        content: sourceVersion.content,
+        ydoc: sourceVersion.ydoc, // May be null (fallback to content)
+        updatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        updatedAt: true,
+      },
+    });
+
+    // 4d. Create a new version marking this restoration
+    await tx.noteVersion.create({
+      data: {
+        noteId,
+        version: nextVersion + 1,
+        title: sourceVersion.title,
+        content: sourceVersion.content,
+        ydoc: sourceVersion.ydoc,
+        createdById: userId,
+      },
+    });
+
+    return {
+      note: updatedNote,
+      restoredFromVersion: sourceVersion.version,
+      undoVersionId: undoSnapshot.id,
+    };
+  });
+
+  logger.info(
+    {
+      noteId,
+      versionId,
+      userId,
+      restoredFromVersion: result.restoredFromVersion,
+      undoVersionId: result.undoVersionId,
+    },
+    "Note restored to previous version"
+  );
+
+  return result;
 }

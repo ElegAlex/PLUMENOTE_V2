@@ -20,6 +20,8 @@ export type {
   VersionsListResponse,
   VersionResponse,
   SnapshotResult,
+  RestoreResult,
+  RestoreVersionResponse,
 } from "./types";
 
 // Schemas (Zod - safe for client validation)
@@ -29,6 +31,7 @@ export {
   noteIdParamSchema,
   versionsQuerySchema,
   snapshotRequestSchema,
+  restoreVersionSchema,
 } from "./schemas/version.schema";
 
 export type {
@@ -37,6 +40,7 @@ export type {
   NoteIdParamSchemaInput,
   VersionsQuerySchemaInput,
   SnapshotRequestSchemaInput,
+  RestoreVersionSchemaInput,
 } from "./schemas/version.schema";
 
 // Hooks (client-side)
@@ -45,6 +49,8 @@ export { useVersionHistory, versionHistoryKeys } from "./hooks/useVersionHistory
 export type { UseVersionHistoryOptions } from "./hooks/useVersionHistory";
 export { useVersionDetail } from "./hooks/useVersionDetail";
 export type { UseVersionDetailOptions } from "./hooks/useVersionDetail";
+export { useRestoreVersion } from "./hooks/useRestoreVersion";
+export type { UseRestoreVersionOptions } from "./hooks/useRestoreVersion";
 
 // Components (client-side)
 export { VersionHistoryPanel } from "./components/VersionHistoryPanel";
@@ -57,6 +63,8 @@ export { VersionPreview } from "./components/VersionPreview";
 export type { VersionPreviewProps } from "./components/VersionPreview";
 export { VersionDiff } from "./components/VersionDiff";
 export type { VersionDiffProps } from "./components/VersionDiff";
+export { RestoreVersionDialog } from "./components/RestoreVersionDialog";
+export type { RestoreVersionDialogProps } from "./components/RestoreVersionDialog";
 
 // Utilities
 export { getInitials } from "./utils";

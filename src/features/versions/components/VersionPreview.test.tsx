@@ -2,6 +2,7 @@
  * Tests for VersionPreview component
  *
  * @see Story 9.2: Affichage de l'Historique des Versions
+ * @see Story 9.3: Restauration de Version
  * @see AC: #4 - Prévisualisation du contenu en lecture seule
  * @see AC: #5 - Contenu Markdown rendu
  * @see AC: #6 - Diff visuel entre version sélectionnée et actuelle
@@ -9,8 +10,40 @@
 
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { VersionPreview } from "./VersionPreview";
 import type { NoteVersion } from "../types";
+
+/**
+ * Create a fresh QueryClient for each test
+ */
+function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+}
+
+/**
+ * Wrapper component for tests that need React Query
+ */
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  const queryClient = createTestQueryClient();
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+
+/**
+ * Render helper with QueryClient
+ */
+function renderWithClient(ui: React.ReactElement) {
+  return render(ui, { wrapper: TestWrapper });
+}
 
 /**
  * Mock version data factory
@@ -34,7 +67,7 @@ describe("VersionPreview", () => {
     it("should render version badge", () => {
       const version = createMockVersion({ version: 5 });
 
-      render(<VersionPreview version={version} />);
+      renderWithClient(<VersionPreview version={version} />);
 
       expect(screen.getByText("v5")).toBeInTheDocument();
     });
@@ -44,7 +77,7 @@ describe("VersionPreview", () => {
         createdAt: new Date("2026-01-16T14:30:00Z"),
       });
 
-      render(<VersionPreview version={version} />);
+      renderWithClient(<VersionPreview version={version} />);
 
       // Should show formatted date in French
       expect(screen.getByText(/16 janvier 2026/i)).toBeInTheDocument();
@@ -53,7 +86,7 @@ describe("VersionPreview", () => {
     it("should render version title", () => {
       const version = createMockVersion({ title: "My Note Title" });
 
-      render(<VersionPreview version={version} />);
+      renderWithClient(<VersionPreview version={version} />);
 
       expect(screen.getByText("My Note Title")).toBeInTheDocument();
     });
@@ -63,7 +96,7 @@ describe("VersionPreview", () => {
         content: "Hello World",
       });
 
-      render(<VersionPreview version={version} />);
+      renderWithClient(<VersionPreview version={version} />);
 
       expect(screen.getByText(/Hello World/)).toBeInTheDocument();
     });
@@ -73,7 +106,7 @@ describe("VersionPreview", () => {
         content: null,
       });
 
-      render(<VersionPreview version={version} />);
+      renderWithClient(<VersionPreview version={version} />);
 
       expect(screen.getByText("Contenu non disponible")).toBeInTheDocument();
     });
@@ -81,7 +114,7 @@ describe("VersionPreview", () => {
     it("should show read-only notice", () => {
       const version = createMockVersion();
 
-      render(<VersionPreview version={version} />);
+      renderWithClient(<VersionPreview version={version} />);
 
       expect(
         screen.getByText("Cette version est en lecture seule")
@@ -95,7 +128,7 @@ describe("VersionPreview", () => {
         content: "# Header 1\n## Header 2\n### Header 3",
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       expect(container.querySelector("h1")).toBeInTheDocument();
       expect(container.querySelector("h2")).toBeInTheDocument();
@@ -107,7 +140,7 @@ describe("VersionPreview", () => {
         content: "This is **bold** text",
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       expect(container.querySelector("strong")).toBeInTheDocument();
       expect(container.querySelector("strong")?.textContent).toBe("bold");
@@ -118,7 +151,7 @@ describe("VersionPreview", () => {
         content: "This is *italic* text",
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       expect(container.querySelector("em")).toBeInTheDocument();
       expect(container.querySelector("em")?.textContent).toBe("italic");
@@ -129,7 +162,7 @@ describe("VersionPreview", () => {
         content: "Use `code` here",
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       expect(container.querySelector("code")).toBeInTheDocument();
       expect(container.querySelector("code")?.textContent).toBe("code");
@@ -140,7 +173,7 @@ describe("VersionPreview", () => {
         content: "```js\nconst x = 1;\n```",
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       expect(container.querySelector("pre")).toBeInTheDocument();
       expect(container.querySelector("pre code")).toBeInTheDocument();
@@ -151,7 +184,7 @@ describe("VersionPreview", () => {
         content: "Visit [Google](https://google.com)",
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       const link = container.querySelector("a");
       expect(link).toBeInTheDocument();
@@ -166,7 +199,7 @@ describe("VersionPreview", () => {
         content: '<script>alert("xss")</script>',
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       expect(container.querySelector("script")).not.toBeInTheDocument();
       expect(container.innerHTML).not.toContain("alert");
@@ -177,7 +210,7 @@ describe("VersionPreview", () => {
         content: '<div onclick="alert(1)">Click me</div>',
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       expect(container.innerHTML).not.toContain("onclick");
     });
@@ -187,7 +220,7 @@ describe("VersionPreview", () => {
         content: '<img src=x onerror="alert(1)">',
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       expect(container.innerHTML).not.toContain("onerror");
     });
@@ -197,7 +230,7 @@ describe("VersionPreview", () => {
         content: '[click](javascript:alert(1))',
       });
 
-      const { container } = render(<VersionPreview version={version} />);
+      const { container } = renderWithClient(<VersionPreview version={version} />);
 
       // DOMPurify removes javascript: URLs - link should either not exist or have safe href
       const link = container.querySelector("a");
@@ -219,7 +252,7 @@ describe("VersionPreview", () => {
         content: "Version content",
       });
 
-      render(
+      renderWithClient(
         <VersionPreview version={version} currentContent="Current content" />
       );
 
@@ -232,7 +265,7 @@ describe("VersionPreview", () => {
         content: "Version content",
       });
 
-      render(<VersionPreview version={version} />);
+      renderWithClient(<VersionPreview version={version} />);
 
       expect(screen.queryByText("Diff")).not.toBeInTheDocument();
     });
@@ -242,7 +275,7 @@ describe("VersionPreview", () => {
         content: null,
       });
 
-      render(
+      renderWithClient(
         <VersionPreview version={version} currentContent="Current content" />
       );
 
@@ -254,7 +287,7 @@ describe("VersionPreview", () => {
         content: "Old content",
       });
 
-      render(
+      renderWithClient(
         <VersionPreview version={version} currentContent="New content" />
       );
 
@@ -272,7 +305,7 @@ describe("VersionPreview", () => {
         content: "Version content",
       });
 
-      render(
+      renderWithClient(
         <VersionPreview version={version} currentContent="Current content" />
       );
 
@@ -293,7 +326,7 @@ describe("VersionPreview", () => {
         content: "Old text",
       });
 
-      render(
+      renderWithClient(
         <VersionPreview version={version} currentContent="New text" />
       );
 
@@ -310,7 +343,7 @@ describe("VersionPreview", () => {
     it("should have accessible content region", () => {
       const version = createMockVersion({ version: 3 });
 
-      render(<VersionPreview version={version} />);
+      renderWithClient(<VersionPreview version={version} />);
 
       expect(
         screen.getByRole("article", { name: /Contenu de la version 3/i })
