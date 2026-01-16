@@ -10,11 +10,12 @@
  * @see Story 5.3: Déplacement de Notes dans les Dossiers
  * @see Story 8.6: Partage vers Espace Équipe
  * @see Story 10.2: Affichage du Nombre de Vues (FR43)
+ * @see Story 10.3: Affichage Date de Modification et Contributeur (FR44, FR45)
  */
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { MoreHorizontal, Trash2, Edit, Star, FolderInput, Share2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -27,6 +28,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ViewCount } from "@/features/analytics/components/ViewCount";
 import type { Note } from "../types";
@@ -263,11 +269,21 @@ export function NoteCard({
           </div>
         )}
 
-        {/* Metadata with view count (Story 10.2) */}
-        <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-          <ViewCount count={note.viewCount} variant="compact" showTooltip={false} />
-          <span>Modifié {formatDate(note.updatedAt)}</span>
-        </div>
+        {/* Metadata with view count and modification info (Story 10.2, 10.3) */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground cursor-default">
+              <ViewCount count={note.viewCount} variant="compact" showTooltip={false} />
+              <span>Modifié {formatDate(note.updatedAt)}</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>
+              Modifié par {note.lastModifiedBy?.name || "Inconnu"} le{" "}
+              {format(new Date(note.updatedAt), "d MMMM yyyy 'à' HH:mm", { locale: fr })}
+            </p>
+          </TooltipContent>
+        </Tooltip>
       </CardContent>
     </Card>
   );

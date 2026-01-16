@@ -16,6 +16,7 @@
  * @see Story 5.5: Fil d'Ariane (Breadcrumb)
  * @see Story 6.5: Notes Favorites
  * @see Story 6.7: Panneau Backlinks
+ * @see Story 10.3: Affichage Date de Modification et Contributeur (FR44, FR45)
  * @see FR8: Un utilisateur peut editer une note en Markdown avec previsualisation live
  */
 
@@ -469,6 +470,8 @@ export default function NotePage({ params }: NotePageProps) {
             saveStatus={displaySaveStatus}
             isNewNote={isNewNote}
             viewCount={note.viewCount}
+            updatedAt={note.updatedAt}
+            lastModifiedBy={note.lastModifiedBy}
           />
         </div>
         {/* Presence Indicator (Story 4-5) */}

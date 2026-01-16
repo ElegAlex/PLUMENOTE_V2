@@ -3,12 +3,13 @@
 /**
  * Note Header Component
  *
- * Displays the note title (editable), view count, and save status indicator.
+ * Displays the note title (editable), view count, modification info, and save status indicator.
  * Handles auto-focus for new notes.
  *
  * @see Story 3.3: Creation d'une Nouvelle Note
  * @see Story 3.4: Sauvegarde Automatique des Notes
  * @see Story 10.2: Affichage du Nombre de Vues (FR43)
+ * @see Story 10.3: Affichage Date de Modification et Contributeur (FR44, FR45)
  * @see AC #3: Auto-focus sur le titre
  * @see AC #5: Indicateur "Sauvegarde"
  * @see AC #2 (3.4): Indicateur "Hors ligne"
@@ -18,6 +19,8 @@ import { useRef, useEffect } from "react";
 import { Check, Loader2, AlertCircle, Cloud, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ViewCount } from "@/features/analytics/components/ViewCount";
+import { NoteModificationInfo } from "@/features/analytics/components/NoteModificationInfo";
+import type { LastModifiedByUser } from "@/features/analytics";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error" | "offline";
 
@@ -34,6 +37,12 @@ export interface NoteHeaderProps {
   placeholder?: string;
   /** View count for the note (Story 10.2) */
   viewCount?: number;
+  /** Last updated timestamp (Story 10.3) */
+  updatedAt?: Date | string;
+  /** User who last modified the note (Story 10.3) */
+  lastModifiedBy?: LastModifiedByUser | null;
+  /** User who created the note - fallback for lastModifiedBy (Story 10.3) */
+  createdBy?: LastModifiedByUser | null;
   /** Additional CSS classes */
   className?: string;
 }
@@ -92,7 +101,7 @@ function SaveStatusIndicator({ status }: { status: SaveStatus }) {
 }
 
 /**
- * Note header with editable title, view count, and save status
+ * Note header with editable title, view count, modification info, and save status
  */
 export function NoteHeader({
   title,
@@ -101,6 +110,9 @@ export function NoteHeader({
   isNewNote = false,
   placeholder = "Sans titre",
   viewCount,
+  updatedAt,
+  lastModifiedBy,
+  createdBy,
   className,
 }: NoteHeaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -129,6 +141,15 @@ export function NoteHeader({
 
       {/* View count indicator (Story 10.2) */}
       {viewCount !== undefined && <ViewCount count={viewCount} />}
+
+      {/* Modification info (Story 10.3) */}
+      {updatedAt && (
+        <NoteModificationInfo
+          updatedAt={updatedAt}
+          lastModifiedBy={lastModifiedBy || null}
+          createdBy={createdBy}
+        />
+      )}
 
       {/* Save status indicator */}
       <SaveStatusIndicator status={saveStatus} />

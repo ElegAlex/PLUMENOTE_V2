@@ -152,4 +152,80 @@ describe("NoteHeader", () => {
       expect(screen.getByText("1.5k")).toBeInTheDocument();
     });
   });
+
+  describe("Modification Info (Story 10.3)", () => {
+    const mockUser = {
+      id: "user-123",
+      name: "John Doe",
+      image: null,
+    };
+
+    it("does not show modification info when updatedAt is undefined", () => {
+      render(<NoteHeader {...defaultProps} />);
+
+      // Should not show modification info elements
+      expect(screen.queryByText(/Modifié/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/par/)).not.toBeInTheDocument();
+    });
+
+    it("shows modification info when updatedAt is provided", () => {
+      render(
+        <NoteHeader
+          {...defaultProps}
+          updatedAt={new Date("2026-01-16T14:30:00Z")}
+          lastModifiedBy={mockUser}
+        />
+      );
+
+      // Should show relative date
+      expect(screen.getByText(/Modifié/)).toBeInTheDocument();
+      // Should show "par" connector
+      expect(screen.getByText("par")).toBeInTheDocument();
+      // Should show user name
+      expect(screen.getByText("John Doe")).toBeInTheDocument();
+    });
+
+    it("shows modification info without contributor when lastModifiedBy is null", () => {
+      render(
+        <NoteHeader
+          {...defaultProps}
+          updatedAt={new Date("2026-01-16T14:30:00Z")}
+          lastModifiedBy={null}
+        />
+      );
+
+      // Should show relative date
+      expect(screen.getByText(/Modifié/)).toBeInTheDocument();
+      // Should NOT show "par" connector when no user
+      expect(screen.queryByText("par")).not.toBeInTheDocument();
+    });
+
+    it("handles ISO string date format", () => {
+      render(
+        <NoteHeader
+          {...defaultProps}
+          updatedAt="2026-01-16T14:30:00.000Z"
+          lastModifiedBy={mockUser}
+        />
+      );
+
+      expect(screen.getByText(/Modifié/)).toBeInTheDocument();
+    });
+
+    it("uses createdBy as fallback when lastModifiedBy is null", () => {
+      const createdByUser = { id: "creator-1", name: "Creator User", image: null };
+
+      render(
+        <NoteHeader
+          {...defaultProps}
+          updatedAt={new Date("2026-01-16T14:30:00Z")}
+          lastModifiedBy={null}
+          createdBy={createdByUser}
+        />
+      );
+
+      // Should show createdBy user as fallback
+      expect(screen.getByText("Creator User")).toBeInTheDocument();
+    });
+  });
 });
